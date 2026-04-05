@@ -1,7 +1,7 @@
 // Powered by Sakura Focus - Anime Companion with 3D Human-like Walking
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Easing, TextInput, ScrollView, Dimensions } from 'react-native';
-import Svg, { Path, Ellipse, Circle, Rect, G, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Path, Ellipse, Circle, Rect, G } from 'react-native-svg';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { ChatMessage, CompanionState, getSimpleResponse } from '@/types/companion';
 import { TimerPhase } from '@/types';
@@ -32,17 +32,16 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
   const [isBlushing, setIsBlushing] = useState(false);
   const [currentMood, setCurrentMood] = useState<'shy' | 'happy' | 'thinking' | 'worried'>('shy');
   const [isWalking, setIsWalking] = useState(false);
+  const [walkPhase, setWalkPhase] = useState(0);
   const [showFocusTip, setShowFocusTip] = useState(false);
   const [currentTip, setCurrentTip] = useState('');
   
   const characterX = useRef(new Animated.Value(0)).current;
-  const walkCycle = useRef(new Animated.Value(0)).current;
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const walkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const walkDirectionRef = useRef<'right' | 'left'>('right');
   const isWalkingRef = useRef(false);
-  const walkAnimRef = useRef<Animated.CompositeAnimation | null>(null);
-  const cycleAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const walkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const jumpAnim = useRef(new Animated.Value(0)).current;
@@ -58,44 +57,18 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     "Close eyes, take 3 breaths!",
   ];
 
-  // Interpolation values for human-like walking
-  const leftLegRot = walkCycle.interpolate({
-    inputRange: [0, 0.25, 0.5, 0.75, 1],
-    outputRange: ['-25deg', '0deg', '25deg', '0deg', '-25deg'],
-  });
-
-  const rightLegRot = walkCycle.interpolate({
-    inputRange: [0, 0.25, 0.5, 0.75, 1],
-    outputRange: ['25deg', '0deg', '-25deg', '0deg', '25deg'],
-  });
-
-  const leftArmRot = walkCycle.interpolate({
-    inputRange: [0, 0.25, 0.5, 0.75, 1],
-    outputRange: ['20deg', '0deg', '-20deg', '0deg', '20deg'],
-  });
-
-  const rightArmRot = walkCycle.interpolate({
-    inputRange: [0, 0.25, 0.5, 0.75, 1],
-    outputRange: ['-20deg', '0deg', '20deg', '0deg', '-20deg'],
-  });
-
-  const bodyBob = walkCycle.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0, -8, 0],
-  });
-
   const stopWalking = useCallback(() => {
     if (walkTimeoutRef.current) {
       clearTimeout(walkTimeoutRef.current);
       walkTimeoutRef.current = null;
     }
-    if (cycleAnimRef.current) {
-      cycleAnimRef.current.stop();
-      cycleAnimRef.current = null;
+    if (walkIntervalRef.current) {
+      clearInterval(walkIntervalRef.current);
+      walkIntervalRef.current = null;
     }
     setIsWalking(false);
     isWalkingRef.current = false;
-    
+    setWalkPhase(0);
     Animated.spring(characterX, {
       toValue: 0,
       friction: 8,
@@ -112,44 +85,25 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     walkDirectionRef.current = 'right';
     characterX.setValue(0);
     flipAnim.setValue(1);
-    walkCycle.setValue(0);
 
-    // Start the walk cycle loop (legs, arms, bobbing)
-    cycleAnimRef.current = Animated.loop(
-      Animated.sequence([
-        Animated.timing(walkCycle, {
-          toValue: 1,
-          duration: 600,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: false,
-        }),
-        Animated.timing(walkCycle, {
-          toValue: 0,
-          duration: 600,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: false,
-        }),
-      ])
-    );
-    cycleAnimRef.current.start();
+    walkIntervalRef.current = setInterval(() => {
+      setWalkPhase(prev => (prev + 1) % 4);
+    }, 300);
 
-    // Walk across screen
     const walkAcross = () => {
       if (!isWalkingRef.current) {
-        if (cycleAnimRef.current) cycleAnimRef.current.stop();
+        if (walkIntervalRef.current) clearInterval(walkIntervalRef.current);
         return;
       }
       
       const targetX = walkDirectionRef.current === 'right' ? SCREEN_WIDTH - 100 : -50;
       
-      walkAnimRef.current = Animated.timing(characterX, {
+      Animated.timing(characterX, {
         toValue: targetX,
         duration: 8000,
         easing: Easing.linear,
         useNativeDriver: false,
-      });
-      
-      walkAnimRef.current.start(({ finished }) => {
+      }).start(({ finished }) => {
         if (finished && isWalkingRef.current) {
           walkDirectionRef.current = walkDirectionRef.current === 'right' ? 'left' : 'right';
           flipAnim.setValue(walkDirectionRef.current === 'right' ? 1 : -1);
@@ -159,30 +113,29 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     };
 
     walkAcross();
-  }, [isExpanded, flipAnim, characterX, walkCycle]);
+  }, [isExpanded, flipAnim, characterX]);
 
   useEffect(() => {
-    if (!isWalking) {
-      const bounce = Animated.loop(
-        Animated.sequence([
-          Animated.timing(bounceAnim, {
-            toValue: -8,
-            duration: 1000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-          Animated.timing(bounceAnim, {
-            toValue: 0,
-            duration: 1000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-        ])
-      );
-      bounce.start();
-      return () => bounce.stop();
-    }
-  }, [isWalking, bounceAnim]);
+    const bounce = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, {
+          toValue: -8,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ])
+    );
+    bounce.start();
+    
+    return () => bounce.stop();
+  }, [bounceAnim]);
 
   useEffect(() => {
     if (prevPhaseRef.current === 'idle' && phase === 'focus' && isRunning) {
@@ -212,7 +165,7 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       if (walkTimeoutRef.current) clearTimeout(walkTimeoutRef.current);
-      if (cycleAnimRef.current) cycleAnimRef.current.stop();
+      if (walkIntervalRef.current) clearInterval(walkIntervalRef.current);
     };
   }, [isExpanded, stopWalking, startWalking]);
 
@@ -313,6 +266,44 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     return "Ok!";
   };
 
+  const getLegOffset = (isLeft: boolean) => {
+    if (!isWalking) return 0;
+    if (isLeft) {
+      if (walkPhase === 0) return -15;
+      if (walkPhase === 1) return -5;
+      if (walkPhase === 2) return 15;
+      return 5;
+    } else {
+      if (walkPhase === 0) return 15;
+      if (walkPhase === 1) return 5;
+      if (walkPhase === 2) return -15;
+      return -5;
+    }
+  };
+
+  const getArmOffset = (isLeft: boolean) => {
+    if (!isWalking) return 0;
+    if (isLeft) {
+      if (walkPhase === 0 || walkPhase === 2) return 15;
+      return -15;
+    } else {
+      if (walkPhase === 0 || walkPhase === 2) return -15;
+      return 15;
+    }
+  };
+
+  const getBodyBob = () => {
+    if (!isWalking) return 0;
+    if (walkPhase === 1 || walkPhase === 2) return -5;
+    return 0;
+  };
+
+  const leftLegOffset = getLegOffset(true);
+  const rightLegOffset = getLegOffset(false);
+  const leftArmOffset = getArmOffset(true);
+  const rightArmOffset = getArmOffset(false);
+  const bodyBob = getBodyBob();
+
   if (!visible) return null;
 
   return (
@@ -344,43 +335,33 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
           )}
           
           <Svg width={120} height={260} viewBox="0 0 400 850">
-            <Defs>
-              <LinearGradient id="legGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <Stop offset="0%" stopColor="#FDE2D2" />
-                <Stop offset="100%" stopColor="#E8C4B8" />
-              </LinearGradient>
-              <LinearGradient id="armGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <Stop offset="0%" stopColor="#FFFFFF" />
-                <Stop offset="100%" stopColor="#E8E8E8" />
-              </LinearGradient>
-            </Defs>
-
-            {/* Shadow */}
             <Ellipse cx="200" cy="800" rx="70" ry="12" fill="#000000" opacity={isWalking ? 0.15 : 0.1} />
 
-            {/* Back Hair (behind body) */}
             <Path d="M170 120 Q150 200 160 320" stroke="#2C2C2C" strokeWidth="45" strokeLinecap="round" />
 
-            {/* LEFT LEG (Back) - darker for 3D depth */}
+            {/* LEFT LEG (Back) - darker for depth */}
             <G opacity={0.6}>
-              <Path d="M185 520 L188 600 L182 720" stroke="#C9A89A" strokeWidth="32" strokeLinecap="round" />
-              <Path d="M182 720 L185 750" stroke="#C9A89A" strokeWidth="28" strokeLinecap="round" />
+              <Path 
+                d={`M185 520 L${188 + leftLegOffset * 0.3} 600 L${182 + leftLegOffset * 0.8} 720`} 
+                stroke="#C9A89A" strokeWidth="32" strokeLinecap="round" 
+              />
+              <Path d="M180 600 L183 720" stroke="#C9A89A" strokeWidth="30" strokeLinecap="round" />
               <Path d="M165 750 L190 752 L188 770 L160 768 Z" fill="#3D2A24" />
             </G>
 
-            {/* LEFT ARM (Back) - darker for 3D depth */}
+            {/* LEFT ARM (Back) - darker for depth */}
             <G opacity={0.6}>
-              <Path d="M160 240 L145 350" stroke="#C8C8C8" strokeWidth="22" strokeLinecap="round" />
+              <Path 
+                d={`M160 240 L${145 + leftArmOffset * 0.3} 350`} 
+                stroke="#C8C8C8" strokeWidth="22" strokeLinecap="round" 
+              />
               <Rect x="138" y="340" width="18" height="14" rx="6" fill="#C8C8C8" />
             </G>
 
-            {/* Torso Group */}
+            {/* Torso */}
             <G>
-              {/* Skirt */}
               <Path d="M165 390 L235 390 L260 520 L140 520 Z" fill="#283593" />
               <Path d="M185 390 V520 M200 390 V520 M215 390 V520" stroke="#1A237E" strokeWidth="2" />
-
-              {/* Top/Shirt */}
               <G>
                 <Path d="M160 210 L240 210 L250 395 L150 395 Z" fill="#FFFFFF" />
                 <Path d="M160 210 Q200 280 240 210 L255 230 Q200 310 145 230 Z" fill="#283593" />
@@ -390,46 +371,39 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
               </G>
             </G>
 
-            {/* RIGHT LEG (Front) - brighter for 3D depth */}
-            <G transform={`rotate(${rightLegRot}, 200, 520)`}>
-              <Path d="M215 520 L215 650 L220 740" stroke="url(#legGradient)" strokeWidth="32" strokeLinecap="round" />
-              <Rect x="195" y="735" width="45" height="15" rx="5" fill="#4E342E" />
-            </G>
-
-            {/* RIGHT ARM (Front) - brighter for 3D depth */}
-            <G transform={`rotate(${rightArmRot}, 240, 240)`}>
-              <Path d="M240 240 L260 380" stroke="url(#armGradient)" strokeWidth="22" strokeLinecap="round" />
-              <Rect x="250" y="370" width="20" height="25" rx="10" fill="#F5F5F5" />
-            </G>
-
-            {/* Head Group */}
+            {/* RIGHT LEG (Front) */}
             <G>
-              {/* Face/Head */}
+              <Path 
+                d={`M215 520 L${212 + rightLegOffset * 0.3} 600 L${218 + rightLegOffset * 0.8} 720`} 
+                stroke="#FDE2D2" strokeWidth="32" strokeLinecap="round" 
+              />
+              <Path d="M215 600 L212 720" stroke="#FFFFFF" strokeWidth="30" strokeLinecap="round" />
+              <Path d="M195 750 L230 752 L235 768 L200 770 Z" fill="#4E342E" />
+            </G>
+
+            {/* RIGHT ARM (Front) */}
+            <G>
+              <Path 
+                d={`M240 240 L${255 + rightArmOffset * 0.3} 350`} 
+                stroke="#FFFFFF" strokeWidth="22" strokeLinecap="round" 
+              />
+              <Rect x="248" y="340" width="18" height="14" rx="6" fill="#F5F5F5" />
+            </G>
+
+            {/* Head */}
+            <G>
               <Rect x="190" y="180" width="20" height="30" fill="#FDE2D2" />
               <Path d="M165 110 Q165 195 200 200 Q235 195 235 110 Z" fill="#FDE2D2" />
-              
-              {/* Blush */}
               <Circle cx="180" cy="165" r="7" fill="#FFCDD2" opacity={isBlushing ? 0.9 : 0.5} />
               <Circle cx="220" cy="165" r="7" fill="#FFCDD2" opacity={isBlushing ? 0.9 : 0.5} />
-              
-              {/* Eyes */}
               <Path d="M180 155 Q188 160 195 155" fill="none" stroke="#4E342E" strokeWidth="2" />
               <Path d="M205 155 Q212 160 220 155" fill="none" stroke="#4E342E" strokeWidth="2" />
-              
-              {/* Hair Front */}
               <Path d="M230 100 Q280 150 250 350" fill="none" stroke="#2C2C2C" strokeWidth="24" strokeLinecap="round" />
               <Circle cx="235" cy="100" r="9" fill="#FFFFFF" stroke="#E0E0E0" strokeWidth="1" />
               <Path d="M165 110 Q200 80 235 110 L240 140 Q220 120 200 135 Q180 120 160 140 Z" fill="#2C2C2C" />
               <Path d="M165 120 L160 220 M235 120 L240 220" stroke="#2C2C2C" strokeWidth="11" strokeLinecap="round" />
             </G>
-
           </Svg>
-
-          {isWalking && (
-            <View style={styles.walkIndicator}>
-              <Text style={styles.walkText}>🚶</Text>
-            </View>
-          )}
         </Pressable>
       </Animated.View>
 
@@ -540,14 +514,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: FontWeight.bold,
     color: '#283593',
-  },
-  walkIndicator: {
-    position: 'absolute',
-    bottom: -20,
-    alignSelf: 'center',
-  },
-  walkText: {
-    fontSize: 20,
   },
   chatPanel: {
     position: 'absolute',
