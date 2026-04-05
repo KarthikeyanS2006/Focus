@@ -377,8 +377,10 @@ export default function TimerScreen() {
           streak: streak,
           distractionCount: distractionCount,
           sessionGoal: sessionGoal,
-          isActive: true,
+          isActive: phase !== 'idle',
         }}
+        isRunning={isRunning}
+        phase={phase}
       />
     </View>
   );

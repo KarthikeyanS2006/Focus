@@ -4,10 +4,13 @@ import { View, Text, StyleSheet, Pressable, Animated, Easing, TextInput, ScrollV
 import Svg, { Path, Ellipse, Circle, Rect, G } from 'react-native-svg';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { ChatMessage, CompanionState, getSimpleResponse } from '@/types/companion';
+import { TimerPhase } from '@/types';
 
 interface Props {
   state: CompanionState;
   visible?: boolean;
+  isRunning?: boolean;
+  phase?: TimerPhase;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -21,7 +24,7 @@ const INITIAL_MESSAGE: ChatMessage = {
 
 const IDLE_TIMEOUT = 30000;
 
-export function AnimeCompanion({ state, visible = true }: Props) {
+export function AnimeCompanion({ state, visible = true, isRunning = false, phase = 'idle' }: Props) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
   const [inputText, setInputText] = useState('');
@@ -30,6 +33,8 @@ export function AnimeCompanion({ state, visible = true }: Props) {
   const [currentMood, setCurrentMood] = useState<'shy' | 'happy' | 'thinking' | 'worried'>('shy');
   const [isWalking, setIsWalking] = useState(false);
   const [animKey, setAnimKey] = useState(0);
+  const [showFocusTip, setShowFocusTip] = useState(false);
+  const [currentTip, setCurrentTip] = useState('');
   
   const characterX = useRef(new Animated.Value(0)).current;
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -39,6 +44,17 @@ export function AnimeCompanion({ state, visible = true }: Props) {
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const jumpAnim = useRef(new Animated.Value(0)).current;
   const flipAnim = useRef(new Animated.Value(1)).current;
+  const phaseRef = useRef(phase);
+  const prevPhaseRef = useRef(phase);
+
+  const FOCUS_TIPS = [
+    "Put your phone face-down! 📱",
+    "Sit quietly & breathe deep 🌸",
+    "Remove distractions nearby!",
+    "Clear your mind & focus!",
+    "Keep phone in another room!",
+    "Close eyes, take 3 breaths!",
+  ];
 
   useEffect(() => {
     const nativeDriver = Platform.OS !== 'web';
@@ -63,6 +79,20 @@ export function AnimeCompanion({ state, visible = true }: Props) {
     
     return () => bounce.stop();
   }, [bounceAnim]);
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  useEffect(() => {
+    if (prevPhaseRef.current === 'idle' && phase === 'focus' && isRunning) {
+      const tip = FOCUS_TIPS[Math.floor(Math.random() * FOCUS_TIPS.length)];
+      setCurrentTip(tip);
+      setShowFocusTip(true);
+      setTimeout(() => setShowFocusTip(false), 6000);
+    }
+    prevPhaseRef.current = phase;
+  }, [phase, isRunning]);
 
   useEffect(() => {
     resetIdleTimer();
@@ -247,7 +277,12 @@ export function AnimeCompanion({ state, visible = true }: Props) {
         ]}
       >
         <Pressable onPress={handleTap}>
-          {!isWalking && (
+          {showFocusTip ? (
+            <View style={styles.focusTipBubble}>
+              <Text style={styles.focusTipText}>{currentTip}</Text>
+              <View style={styles.focusTipTail} />
+            </View>
+          ) : !isWalking && (
             <View style={styles.speechBubble}>
               <Text style={styles.speechText}>{getSpeechText()}</Text>
               <View style={styles.speechTail} />
@@ -581,5 +616,39 @@ const styles = StyleSheet.create({
   sendText: {
     fontSize: 16,
     color: Colors.white,
+  },
+  focusTipBubble: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 4,
+    marginLeft: 30,
+    borderWidth: 2,
+    borderColor: '#388E3C',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+    maxWidth: 180,
+  },
+  focusTipText: {
+    fontSize: 12,
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
+  },
+  focusTipTail: {
+    position: 'absolute',
+    bottom: -12,
+    left: 15,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderTopWidth: 12,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#388E3C',
   },
 });
