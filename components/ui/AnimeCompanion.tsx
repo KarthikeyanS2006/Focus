@@ -78,42 +78,13 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
   }, [flipAnim, characterX]);
 
   const startWalking = useCallback(() => {
-    if (isExpanded) return;
-    
     setIsWalking(true);
     isWalkingRef.current = true;
-    walkDirectionRef.current = 'right';
-    characterX.setValue(0);
-    flipAnim.setValue(1);
 
     walkIntervalRef.current = setInterval(() => {
       setWalkPhase(prev => (prev + 1) % 4);
     }, 300);
-
-    const walkAcross = () => {
-      if (!isWalkingRef.current) {
-        if (walkIntervalRef.current) clearInterval(walkIntervalRef.current);
-        return;
-      }
-      
-      const targetX = walkDirectionRef.current === 'right' ? SCREEN_WIDTH - 100 : -50;
-      
-      Animated.timing(characterX, {
-        toValue: targetX,
-        duration: 8000,
-        easing: Easing.linear,
-        useNativeDriver: false,
-      }).start(({ finished }) => {
-        if (finished && isWalkingRef.current) {
-          walkDirectionRef.current = walkDirectionRef.current === 'right' ? 'left' : 'right';
-          flipAnim.setValue(walkDirectionRef.current === 'right' ? 1 : -1);
-          walkTimeoutRef.current = setTimeout(walkAcross, 300);
-        }
-      });
-    };
-
-    walkAcross();
-  }, [isExpanded, flipAnim, characterX]);
+  }, []);
 
   useEffect(() => {
     const bounce = Animated.loop(
