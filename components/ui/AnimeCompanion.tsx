@@ -1,4 +1,4 @@
-// Powered by Sakura Focus - Anime Companion with Human-like Behavior
+// Powered by Sakura Focus - Anime Companion with 3D Human-like Walking
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Easing, TextInput, ScrollView, Dimensions } from 'react-native';
 import Svg, { Path, Ellipse, Circle, Rect, G, Defs, LinearGradient, Stop } from 'react-native-svg';
@@ -34,15 +34,15 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
   const [isWalking, setIsWalking] = useState(false);
   const [showFocusTip, setShowFocusTip] = useState(false);
   const [currentTip, setCurrentTip] = useState('');
-  const [walkCycle, setWalkCycle] = useState(0);
-  const [bodyBob, setBodyBob] = useState(0);
   
   const characterX = useRef(new Animated.Value(0)).current;
+  const walkCycle = useRef(new Animated.Value(0)).current;
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const walkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const walkDirectionRef = useRef<'right' | 'left'>('right');
   const isWalkingRef = useRef(false);
-  const walkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const walkAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const cycleAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const jumpAnim = useRef(new Animated.Value(0)).current;
@@ -50,27 +50,52 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
   const prevPhaseRef = useRef(phase);
 
   const FOCUS_TIPS = [
-    "Put your phone face-down! 📱",
-    "Sit quietly & breathe deep 🌸",
+    "Put your phone face-down!",
+    "Sit quietly & breathe deep",
     "Remove distractions nearby!",
     "Clear your mind & focus!",
     "Keep phone in another room!",
     "Close eyes, take 3 breaths!",
   ];
 
+  // Interpolation values for human-like walking
+  const leftLegRot = walkCycle.interpolate({
+    inputRange: [0, 0.25, 0.5, 0.75, 1],
+    outputRange: ['-25deg', '0deg', '25deg', '0deg', '-25deg'],
+  });
+
+  const rightLegRot = walkCycle.interpolate({
+    inputRange: [0, 0.25, 0.5, 0.75, 1],
+    outputRange: ['25deg', '0deg', '-25deg', '0deg', '25deg'],
+  });
+
+  const leftArmRot = walkCycle.interpolate({
+    inputRange: [0, 0.25, 0.5, 0.75, 1],
+    outputRange: ['20deg', '0deg', '-20deg', '0deg', '20deg'],
+  });
+
+  const rightArmRot = walkCycle.interpolate({
+    inputRange: [0, 0.25, 0.5, 0.75, 1],
+    outputRange: ['-20deg', '0deg', '20deg', '0deg', '-20deg'],
+  });
+
+  const bodyBob = walkCycle.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0, -8, 0],
+  });
+
   const stopWalking = useCallback(() => {
     if (walkTimeoutRef.current) {
       clearTimeout(walkTimeoutRef.current);
       walkTimeoutRef.current = null;
     }
-    if (walkIntervalRef.current) {
-      clearInterval(walkIntervalRef.current);
-      walkIntervalRef.current = null;
+    if (cycleAnimRef.current) {
+      cycleAnimRef.current.stop();
+      cycleAnimRef.current = null;
     }
     setIsWalking(false);
     isWalkingRef.current = false;
-    setWalkCycle(0);
-    setBodyBob(0);
+    
     Animated.spring(characterX, {
       toValue: 0,
       friction: 8,
@@ -87,66 +112,77 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     walkDirectionRef.current = 'right';
     characterX.setValue(0);
     flipAnim.setValue(1);
+    walkCycle.setValue(0);
 
-    walkIntervalRef.current = setInterval(() => {
-      setWalkCycle(prev => {
-        const next = prev + 1;
-        if (next > 3) return 0;
-        return next;
-      });
-      setBodyBob(prev => {
-        if (prev === 0) return -6;
-        if (prev === -6) return 0;
-        return prev;
-      });
-    }, 250);
+    // Start the walk cycle loop (legs, arms, bobbing)
+    cycleAnimRef.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(walkCycle, {
+          toValue: 1,
+          duration: 600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: false,
+        }),
+        Animated.timing(walkCycle, {
+          toValue: 0,
+          duration: 600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: false,
+        }),
+      ])
+    );
+    cycleAnimRef.current.start();
 
+    // Walk across screen
     const walkAcross = () => {
       if (!isWalkingRef.current) {
-        if (walkIntervalRef.current) clearInterval(walkIntervalRef.current);
+        if (cycleAnimRef.current) cycleAnimRef.current.stop();
         return;
       }
       
-      const targetX = walkDirectionRef.current === 'right' ? SCREEN_WIDTH - 140 : 0;
+      const targetX = walkDirectionRef.current === 'right' ? SCREEN_WIDTH - 100 : -50;
       
-      Animated.timing(characterX, {
+      walkAnimRef.current = Animated.timing(characterX, {
         toValue: targetX,
-        duration: 6000,
+        duration: 8000,
         easing: Easing.linear,
         useNativeDriver: false,
-      }).start(({ finished }) => {
+      });
+      
+      walkAnimRef.current.start(({ finished }) => {
         if (finished && isWalkingRef.current) {
           walkDirectionRef.current = walkDirectionRef.current === 'right' ? 'left' : 'right';
           flipAnim.setValue(walkDirectionRef.current === 'right' ? 1 : -1);
-          walkTimeoutRef.current = setTimeout(walkAcross, 500);
+          walkTimeoutRef.current = setTimeout(walkAcross, 300);
         }
       });
     };
 
     walkAcross();
-  }, [isExpanded, flipAnim, characterX]);
+  }, [isExpanded, flipAnim, characterX, walkCycle]);
 
   useEffect(() => {
-    const bounce = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bounceAnim, {
-          toValue: -8,
-          duration: 1000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }),
-        Animated.timing(bounceAnim, {
-          toValue: 0,
-          duration: 1000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }),
-      ])
-    );
-    bounce.start();
-    
-    return () => bounce.stop();
-  }, [bounceAnim]);
+    if (!isWalking) {
+      const bounce = Animated.loop(
+        Animated.sequence([
+          Animated.timing(bounceAnim, {
+            toValue: -8,
+            duration: 1000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+          Animated.timing(bounceAnim, {
+            toValue: 0,
+            duration: 1000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+        ])
+      );
+      bounce.start();
+      return () => bounce.stop();
+    }
+  }, [isWalking, bounceAnim]);
 
   useEffect(() => {
     if (prevPhaseRef.current === 'idle' && phase === 'focus' && isRunning) {
@@ -176,7 +212,7 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       if (walkTimeoutRef.current) clearTimeout(walkTimeoutRef.current);
-      if (walkIntervalRef.current) clearInterval(walkIntervalRef.current);
+      if (cycleAnimRef.current) cycleAnimRef.current.stop();
     };
   }, [isExpanded, stopWalking, startWalking]);
 
@@ -277,48 +313,6 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     return "Ok!";
   };
 
-  const getLegRotation = (isLeft: boolean) => {
-    if (!isWalking) return 0;
-    if (isLeft) {
-      if (walkCycle === 0) return -20;
-      if (walkCycle === 1) return -5;
-      if (walkCycle === 2) return 20;
-      return 5;
-    } else {
-      if (walkCycle === 0) return 20;
-      if (walkCycle === 1) return 5;
-      if (walkCycle === 2) return -20;
-      return -5;
-    }
-  };
-
-  const getArmRotation = (isLeft: boolean) => {
-    if (!isWalking) return 0;
-    if (isLeft) {
-      if (walkCycle === 0 || walkCycle === 2) return 20;
-      return -20;
-    } else {
-      if (walkCycle === 0 || walkCycle === 2) return -20;
-      return 20;
-    }
-  };
-
-  const leftLegRot = getLegRotation(true);
-  const rightLegRot = getLegRotation(false);
-  const leftArmRot = getArmRotation(true);
-  const rightArmRot = getArmRotation(false);
-
-  const degToRad = (deg: number) => (deg * Math.PI) / 180;
-  const leftLegX = 200 + 30 * Math.sin(degToRad(leftLegRot));
-  const leftLegY = 520 + 30 * (1 - Math.cos(degToRad(leftLegRot)));
-  const rightLegX = 200 - 30 * Math.sin(degToRad(rightLegRot));
-  const rightLegY = 520 + 30 * (1 - Math.cos(degToRad(rightLegRot)));
-
-  const leftArmX = 160 + 25 * Math.sin(degToRad(leftArmRot));
-  const leftArmY = 240 + 25 * (1 - Math.cos(degToRad(leftArmRot)));
-  const rightArmX = 240 - 25 * Math.sin(degToRad(rightArmRot));
-  const rightArmY = 240 + 25 * (1 - Math.cos(degToRad(rightArmRot)));
-
   if (!visible) return null;
 
   return (
@@ -329,7 +323,7 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
           {
             transform: [
               { translateX: characterX },
-              { translateY: bounceAnim },
+              { translateY: isWalking ? bodyBob : bounceAnim },
               { scaleX: flipAnim },
               { translateY: jumpAnim },
             ],
@@ -367,27 +361,21 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
             {/* Back Hair (behind body) */}
             <Path d="M170 120 Q150 200 160 320" stroke="#2C2C2C" strokeWidth="45" strokeLinecap="round" />
 
-            {/* LEFT LEG (Back) - darker for depth */}
-            <G opacity={0.7}>
-              <Path 
-                d={`M185 520 Q${185 + leftLegRot * 1.5} ${550 + Math.abs(leftLegRot)} ${180 + leftLegRot * 0.8} 720`} 
-                stroke="#D4A89A" strokeWidth="32" strokeLinecap="round" 
-              />
-              <Path d="M180 600 L183 720" stroke="#C9B8B0" strokeWidth="30" strokeLinecap="round" />
-              <Path d="M165 725 L188 730 L185 752 L160 748 Z" fill="#3D2A24" />
+            {/* LEFT LEG (Back) - darker for 3D depth */}
+            <G opacity={0.6}>
+              <Path d="M185 520 L188 600 L182 720" stroke="#C9A89A" strokeWidth="32" strokeLinecap="round" />
+              <Path d="M182 720 L185 750" stroke="#C9A89A" strokeWidth="28" strokeLinecap="round" />
+              <Path d="M165 750 L190 752 L188 770 L160 768 Z" fill="#3D2A24" />
             </G>
 
-            {/* LEFT ARM (Back) - darker for depth */}
-            <G opacity={0.7}>
-              <Path 
-                d={`M160 240 Q${leftArmX - 20} ${(leftArmY + 350) / 2} ${leftArmX + (leftArmRot > 0 ? 15 : -15)} 360`} 
-                stroke="#D0D0D0" strokeWidth="22" strokeLinecap="round" 
-              />
-              <Rect x={170} y="350" width="16" height="12" rx="4" fill="#D0D0D0" />
+            {/* LEFT ARM (Back) - darker for 3D depth */}
+            <G opacity={0.6}>
+              <Path d="M160 240 L145 350" stroke="#C8C8C8" strokeWidth="22" strokeLinecap="round" />
+              <Rect x="138" y="340" width="18" height="14" rx="6" fill="#C8C8C8" />
             </G>
 
-            {/* Torso Group with Body Bob */}
-            <G transform={`translate(0, ${bodyBob})`}>
+            {/* Torso Group */}
+            <G>
               {/* Skirt */}
               <Path d="M165 390 L235 390 L260 520 L140 520 Z" fill="#283593" />
               <Path d="M185 390 V520 M200 390 V520 M215 390 V520" stroke="#1A237E" strokeWidth="2" />
@@ -402,27 +390,20 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
               </G>
             </G>
 
-            {/* RIGHT LEG (Front) */}
-            <G transform={`translate(0, ${bodyBob})`}>
-              <Path 
-                d={`M215 520 Q${215 + rightLegRot * 1.5} ${550 + Math.abs(rightLegRot)} ${220 + rightLegRot * 0.8} 720`} 
-                stroke="url(#legGradient)" strokeWidth="32" strokeLinecap="round" 
-              />
-              <Path d="M215 600 L212 720" stroke="#FFFFFF" strokeWidth="30" strokeLinecap="round" />
-              <Path d="M200 730 L230 725 L235 748 L210 752 Z" fill="#4E342E" />
+            {/* RIGHT LEG (Front) - brighter for 3D depth */}
+            <G transform={`rotate(${rightLegRot}, 200, 520)`}>
+              <Path d="M215 520 L215 650 L220 740" stroke="url(#legGradient)" strokeWidth="32" strokeLinecap="round" />
+              <Rect x="195" y="735" width="45" height="15" rx="5" fill="#4E342E" />
             </G>
 
-            {/* RIGHT ARM (Front) */}
-            <G transform={`translate(0, ${bodyBob})`}>
-              <Path 
-                d={`M240 240 Q${rightArmX + 20} ${(rightArmY + 350) / 2} ${rightArmX + (rightArmRot > 0 ? -15 : 15)} 360`} 
-                stroke="url(#armGradient)" strokeWidth="22" strokeLinecap="round" 
-              />
-              <Rect x="214" y="350" width="16" height="12" rx="4" fill="#F5F5F5" />
+            {/* RIGHT ARM (Front) - brighter for 3D depth */}
+            <G transform={`rotate(${rightArmRot}, 240, 240)`}>
+              <Path d="M240 240 L260 380" stroke="url(#armGradient)" strokeWidth="22" strokeLinecap="round" />
+              <Rect x="250" y="370" width="20" height="25" rx="10" fill="#F5F5F5" />
             </G>
 
-            {/* Head Group (on top) */}
-            <G transform={`translate(0, ${bodyBob})`}>
+            {/* Head Group */}
+            <G>
               {/* Face/Head */}
               <Rect x="190" y="180" width="20" height="30" fill="#FDE2D2" />
               <Path d="M165 110 Q165 195 200 200 Q235 195 235 110 Z" fill="#FDE2D2" />
