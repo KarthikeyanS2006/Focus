@@ -18,7 +18,6 @@ import { CircularTimer } from '@/components/ui/CircularTimer';
 import { AbandonModal } from '@/components/ui/AbandonModal';
 import { DistractionModal } from '@/components/ui/DistractionModal';
 import { SakuraAnimation } from '@/components/ui/SakuraAnimation';
-import { AnimeCompanion } from '@/components/ui/AnimeCompanion';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { useStats } from '@/hooks/useStats';
 import { DistractionLog } from '@/types';
@@ -369,19 +368,6 @@ export default function TimerScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-
-      <AnimeCompanion
-        state={{
-          currentScreen: 'focus',
-          todayMinutes: todayMinutes,
-          streak: streak,
-          distractionCount: distractionCount,
-          sessionGoal: sessionGoal,
-          isActive: phase !== 'idle',
-        }}
-        isRunning={isRunning}
-        phase={phase}
-      />
     </View>
   );
 }
