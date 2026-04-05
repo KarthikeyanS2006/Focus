@@ -1,5 +1,5 @@
 // Powered by Sakura Focus - Japanese Anime Style
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -65,14 +65,17 @@ export default function TimerScreen() {
     "Keep your phone in another room to avoid temptation.",
     "Create a calm environment: sit comfortably and focus.",
     "A clean workspace helps a clear mind - prepare your area first!",
+    "Close your eyes, take 3 deep breaths before starting.",
+    "Remove all distractions from your workspace.",
   ];
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  const prevPhaseRef = useRef(phase);
 
   useEffect(() => {
-    if (phase === 'idle') {
+    if (prevPhaseRef.current === 'idle' && phase !== 'idle') {
       setCurrentTipIndex(Math.floor(Math.random() * FOCUS_TIPS.length));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    prevPhaseRef.current = phase;
   }, [phase]);
 
   useEffect(() => {

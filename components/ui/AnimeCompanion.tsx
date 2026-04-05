@@ -1,6 +1,6 @@
 // Powered by Sakura Focus - Anime Companion with Human-like Behavior
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing, TextInput, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, TextInput, ScrollView, Dimensions, Platform } from 'react-native';
 import Svg, { Path, Ellipse, Circle, Rect, G } from 'react-native-svg';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { ChatMessage, CompanionState, getSimpleResponse } from '@/types/companion';
@@ -19,7 +19,7 @@ const INITIAL_MESSAGE: ChatMessage = {
   timestamp: new Date(),
 };
 
-const IDLE_TIMEOUT = 30000; // 30 seconds
+const IDLE_TIMEOUT = 30000;
 
 export function AnimeCompanion({ state, visible = true }: Props) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -29,19 +29,55 @@ export function AnimeCompanion({ state, visible = true }: Props) {
   const [isBlushing, setIsBlushing] = useState(false);
   const [currentMood, setCurrentMood] = useState<'shy' | 'happy' | 'thinking' | 'worried'>('shy');
   const [isWalking, setIsWalking] = useState(false);
+  const [animKey, setAnimKey] = useState(0);
   
-  // Position tracking
   const characterX = useRef(new Animated.Value(0)).current;
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const walkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const walkDirectionRef = useRef<'right' | 'left'>('right');
   
-  // Animations
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const jumpAnim = useRef(new Animated.Value(0)).current;
   const flipAnim = useRef(new Animated.Value(1)).current;
 
-  // Stop walking
+  useEffect(() => {
+    const nativeDriver = Platform.OS !== 'web';
+    
+    const bounce = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, {
+          toValue: -8,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: nativeDriver,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: nativeDriver,
+        }),
+      ])
+    );
+    bounce.start();
+    
+    return () => bounce.stop();
+  }, [bounceAnim]);
+
+  useEffect(() => {
+    resetIdleTimer();
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (walkTimeoutRef.current) clearTimeout(walkTimeoutRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (state.distractionCount > 0) setCurrentMood('worried');
+    else if (state.currentScreen === 'stats') setCurrentMood('happy');
+    else setCurrentMood('shy');
+  }, [state]);
+
   const stopWalking = useCallback(() => {
     if (walkTimeoutRef.current) {
       clearTimeout(walkTimeoutRef.current);
@@ -51,13 +87,11 @@ export function AnimeCompanion({ state, visible = true }: Props) {
     Animated.spring(characterX, {
       toValue: 0,
       friction: 8,
-      useNativeDriver: false,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
     flipAnim.setValue(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Start walking animation
   const startWalking = useCallback(() => {
     if (isExpanded) return;
     
@@ -68,19 +102,20 @@ export function AnimeCompanion({ state, visible = true }: Props) {
     
     const walkStep = () => {
       if (!isWalking) return;
+      const nativeDriver = Platform.OS !== 'web';
       
       if (walkDirectionRef.current === 'right') {
         Animated.timing(characterX, {
           toValue: SCREEN_WIDTH - 140,
           duration: 4000,
           easing: Easing.linear,
-          useNativeDriver: false,
+          useNativeDriver: nativeDriver,
         }).start(({ finished }) => {
           if (finished && isWalking) {
             Animated.timing(flipAnim, {
               toValue: -1,
               duration: 300,
-              useNativeDriver: false,
+              useNativeDriver: nativeDriver,
             }).start();
             walkDirectionRef.current = 'left';
             walkTimeoutRef.current = setTimeout(walkStep, 300);
@@ -91,13 +126,13 @@ export function AnimeCompanion({ state, visible = true }: Props) {
           toValue: 0,
           duration: 4000,
           easing: Easing.linear,
-          useNativeDriver: false,
+          useNativeDriver: nativeDriver,
         }).start(({ finished }) => {
           if (finished && isWalking) {
             Animated.timing(flipAnim, {
               toValue: 1,
               duration: 300,
-              useNativeDriver: false,
+              useNativeDriver: nativeDriver,
             }).start();
             walkDirectionRef.current = 'right';
             walkTimeoutRef.current = setTimeout(walkStep, 300);
@@ -107,10 +142,8 @@ export function AnimeCompanion({ state, visible = true }: Props) {
     };
     
     walkTimeoutRef.current = setTimeout(walkStep, 500);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExpanded]);
 
-  // Start idle timer
   const resetIdleTimer = useCallback(() => {
     if (idleTimerRef.current) {
       clearTimeout(idleTimerRef.current);
@@ -125,69 +158,27 @@ export function AnimeCompanion({ state, visible = true }: Props) {
     }, IDLE_TIMEOUT);
   }, [isWalking, stopWalking, startWalking]);
 
-  // Trigger jump
   const triggerJump = useCallback(() => {
     setIsBlushing(true);
+    const nativeDriver = Platform.OS !== 'web';
     
     Animated.sequence([
       Animated.timing(jumpAnim, {
         toValue: -50,
         duration: 200,
         easing: Easing.out(Easing.quad),
-        useNativeDriver: false,
+        useNativeDriver: nativeDriver,
       }),
       Animated.timing(jumpAnim, {
         toValue: 0,
         duration: 300,
         easing: Easing.in(Easing.quad),
-        useNativeDriver: false,
+        useNativeDriver: nativeDriver,
       }),
     ]).start();
     
     setTimeout(() => setIsBlushing(false), 500);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Idle bounce animation
-  useEffect(() => {
-    if (!isWalking) {
-      const bounce = Animated.loop(
-        Animated.sequence([
-          Animated.timing(bounceAnim, {
-            toValue: -5,
-            duration: 1500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-          Animated.timing(bounceAnim, {
-            toValue: 0,
-            duration: 1500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-        ])
-      );
-      bounce.start();
-      return () => bounce.stop();
-    } else {
-      bounceAnim.setValue(0);
-    }
-  }, [isWalking, bounceAnim]);
-
-  // Setup idle timer
-  useEffect(() => {
-    resetIdleTimer();
-    return () => {
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      if (walkTimeoutRef.current) clearTimeout(walkTimeoutRef.current);
-    };
-  }, [resetIdleTimer]);
-
-  useEffect(() => {
-    if (state.distractionCount > 0) setCurrentMood('worried');
-    else if (state.currentScreen === 'stats') setCurrentMood('happy');
-    else setCurrentMood('shy');
-  }, [state]);
 
   const handleTap = () => {
     if (isWalking) {
@@ -196,6 +187,7 @@ export function AnimeCompanion({ state, visible = true }: Props) {
     }
     resetIdleTimer();
     setIsExpanded(true);
+    setAnimKey(k => k + 1);
   };
 
   const handleSend = () => {
@@ -233,21 +225,21 @@ export function AnimeCompanion({ state, visible = true }: Props) {
     if (currentMood === 'shy') return "H-hi!";
     if (currentMood === 'worried') return "Stay focused...";
     if (currentMood === 'happy') return "Yay!";
-    return "Hmm...";
+    if (currentMood === 'thinking') return "Hmm...";
+    return "Ok!";
   };
 
   if (!visible) return null;
 
   return (
     <>
-      {/* Character Wrapper - Fixed at bottom right */}
       <Animated.View 
         style={[
           styles.characterWrapper,
           {
             transform: [
               { translateX: characterX },
-              { translateY: isWalking ? 0 : bounceAnim },
+              { translateY: bounceAnim },
               { scaleX: flipAnim },
               { translateY: jumpAnim },
             ],
@@ -255,7 +247,6 @@ export function AnimeCompanion({ state, visible = true }: Props) {
         ]}
       >
         <Pressable onPress={handleTap}>
-          {/* Speech Bubble */}
           {!isWalking && (
             <View style={styles.speechBubble}>
               <Text style={styles.speechText}>{getSpeechText()}</Text>
@@ -263,15 +254,11 @@ export function AnimeCompanion({ state, visible = true }: Props) {
             </View>
           )}
           
-          {/* SVG Character */}
           <Svg width={120} height={240} viewBox="0 0 400 800">
-            {/* Shadow */}
             <Ellipse cx="200" cy="760" rx="70" ry="15" fill="#E0E0E0" opacity={isWalking ? 0.6 : 1} />
 
-            {/* Back Hair */}
             <Path d="M170 120 Q150 200 160 300" stroke="#2C2C2C" strokeWidth="40" strokeLinecap="round" />
 
-            {/* Legs */}
             <G>
               <Path d="M180 500 L185 600" stroke="#FDE2D2" strokeWidth="32" strokeLinecap="round" />
               <Path d="M215 500 L210 600" stroke="#FDE2D2" strokeWidth="32" strokeLinecap="round" />
@@ -281,11 +268,9 @@ export function AnimeCompanion({ state, visible = true }: Props) {
               <Path d="M200 730 L230 725 L235 748 L210 752 Z" fill="#4E342E" />
             </G>
 
-            {/* Skirt */}
             <Path d="M165 390 L235 390 L255 520 L145 520 Z" fill="#283593" />
             <Path d="M185 390 V520 M200 390 V520 M215 390 V520" stroke="#1A237E" strokeWidth="2" />
 
-            {/* Top */}
             <G>
               <Path d="M160 210 L240 210 L250 395 L150 395 Z" fill="#FFFFFF" />
               <Path d="M160 210 Q200 280 240 210 L255 230 Q200 310 145 230 Z" fill="#283593" />
@@ -294,7 +279,6 @@ export function AnimeCompanion({ state, visible = true }: Props) {
               <Circle cx="200" cy="270" r="8" fill="#1E88E5" />
             </G>
 
-            {/* Arms */}
             <G>
               <Path d="M160 215 L175 350" stroke="#FFFFFF" strokeWidth="20" strokeLinecap="round" />
               <Path d="M240 215 L225 350" stroke="#FFFFFF" strokeWidth="20" strokeLinecap="round" />
@@ -303,7 +287,6 @@ export function AnimeCompanion({ state, visible = true }: Props) {
               <Path d="M185 355 Q200 375 215 355" fill="#FDE2D2" />
             </G>
 
-            {/* Head */}
             <G>
               <Rect x="190" y="180" width="20" height="30" fill="#FDE2D2" />
               <Path d="M165 110 Q165 195 200 200 Q235 195 235 110 Z" fill="#FDE2D2" />
@@ -318,7 +301,6 @@ export function AnimeCompanion({ state, visible = true }: Props) {
             </G>
           </Svg>
 
-          {/* Walk indicator */}
           {isWalking && (
             <View style={styles.walkIndicator}>
               <Text style={styles.walkText}>🚶</Text>
