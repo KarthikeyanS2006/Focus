@@ -1,7 +1,7 @@
 // Powered by OnSpace.AI
 import React, { createContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { Session, TimerPhase } from '@/types';
+import { Session, TimerPhase, DistractionLog } from '@/types';
 import { saveSession, updateStreak, getStreak } from '@/services/storageService';
 import {
   preloadSounds,
@@ -13,7 +13,7 @@ import {
 
 const FOCUS_SECONDS = 25 * 60;
 const BREAK_SECONDS = 5 * 60;
-const TICK_COUNTDOWN = 10; // play tick in last N seconds
+const TICK_COUNTDOWN = 10;
 
 export interface TimerContextType {
   phase: TimerPhase;
@@ -23,12 +23,16 @@ export interface TimerContextType {
   streak: number;
   penaltyActive: boolean;
   distractionCount: number;
+  distractions: DistractionLog[];
+  sessionGoal: string;
   startTimer: () => void;
   pauseTimer: () => void;
   abandonSession: () => void;
   skipBreak: () => void;
   resetTimer: () => void;
   logDistraction: () => void;
+  logDistractionWithCategory: (log: DistractionLog) => void;
+  setSessionGoal: (goal: string) => void;
   totalSeconds: number;
 }
 
@@ -42,6 +46,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const [streak, setStreak] = useState(0);
   const [penaltyActive, setPenaltyActive] = useState(false);
   const [distractionCount, setDistractionCount] = useState(0);
+  const [distractions, setDistractions] = useState<DistractionLog[]>([]);
+  const [sessionGoal, setSessionGoal] = useState('');
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionStartRef = useRef<Date | null>(null);
@@ -49,11 +55,15 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const secondsRef = useRef(FOCUS_SECONDS);
   const isRunningRef = useRef(false);
   const distractionRef = useRef(0);
+  const distractionsRef = useRef<DistractionLog[]>([]);
+  const goalRef = useRef('');
 
   phaseRef.current = phase;
   secondsRef.current = secondsLeft;
   isRunningRef.current = isRunning;
   distractionRef.current = distractionCount;
+  distractionsRef.current = distractions;
+  goalRef.current = sessionGoal;
 
   useEffect(() => {
     getStreak().then(setStreak);
@@ -75,7 +85,6 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     const currentPhase = phaseRef.current;
     const durationMinutes = currentPhase === 'focus' ? 25 : 5;
 
-    // Play completion sound
     if (currentPhase === 'focus') {
       await playFocusComplete();
     } else {
@@ -89,7 +98,9 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       durationMinutes,
       status: 'completed',
       penalty: false,
-      distractionCount: currentPhase === 'focus' ? distractionRef.current : 0,
+      distractionCount: distractionRef.current,
+      distractions: distractionsRef.current,
+      goal: goalRef.current || undefined,
     };
     await saveSession(session);
 
@@ -98,13 +109,13 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       setStreak(newStreak);
       setPenaltyActive(false);
       setDistractionCount(0);
-      // Switch to break
+      setDistractions([]);
       setPhase('break');
       setSecondsLeft(BREAK_SECONDS);
     } else {
-      // Break done, go back to focus
       setCurrentRound((r) => r + 1);
       setDistractionCount(0);
+      setDistractions([]);
       setPhase('focus');
       setSecondsLeft(FOCUS_SECONDS);
     }
@@ -116,7 +127,6 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         completePhase();
         return 0;
       }
-      // Play tick in the last TICK_COUNTDOWN seconds of a focus session
       const next = prev - 1;
       if (phaseRef.current === 'focus' && next <= TICK_COUNTDOWN && next > 0) {
         playTick();
@@ -130,6 +140,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       setPhase('focus');
       setSecondsLeft(FOCUS_SECONDS);
       setDistractionCount(0);
+      setDistractions([]);
     }
     setIsRunning(true);
     sessionStartRef.current = new Date();
@@ -155,12 +166,15 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         status: 'abandoned',
         penalty: true,
         distractionCount: distractionRef.current,
+        distractions: distractionsRef.current,
+        goal: goalRef.current || undefined,
       };
       await saveSession(session);
       setPenaltyActive(true);
     }
 
     setDistractionCount(0);
+    setDistractions([]);
     setPhase('idle');
     setSecondsLeft(FOCUS_SECONDS);
   }, []);
@@ -170,6 +184,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     setIsRunning(false);
     setCurrentRound((r) => r + 1);
     setDistractionCount(0);
+    setDistractions([]);
     setPhase('focus');
     setSecondsLeft(FOCUS_SECONDS);
   }, []);
@@ -182,6 +197,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     setCurrentRound(1);
     setPenaltyActive(false);
     setDistractionCount(0);
+    setDistractions([]);
+    setSessionGoal('');
   }, []);
 
   const logDistraction = useCallback(() => {
@@ -190,7 +207,17 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Handle app going background
+  const logDistractionWithCategory = useCallback((log: DistractionLog) => {
+    if (phaseRef.current === 'focus') {
+      setDistractionCount((prev) => prev + 1);
+      setDistractions((prev) => [...prev, log]);
+    }
+  }, []);
+
+  const handleSetSessionGoal = useCallback((goal: string) => {
+    setSessionGoal(goal);
+  }, []);
+
   useEffect(() => {
     const handleAppState = (state: AppStateStatus) => {
       if (state === 'background' && isRunningRef.current && phaseRef.current === 'focus') {
@@ -220,12 +247,16 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         streak,
         penaltyActive,
         distractionCount,
+        distractions,
+        sessionGoal,
         startTimer,
         pauseTimer,
         abandonSession,
         skipBreak,
         resetTimer,
         logDistraction,
+        logDistractionWithCategory,
+        setSessionGoal: handleSetSessionGoal,
         totalSeconds,
       }}
     >

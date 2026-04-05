@@ -1,6 +1,6 @@
-// Powered by Sakura Focus - Japanese Anime Style
+// Powered by Sakura Focus - English Version
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,7 +9,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { WeekChart } from '@/components/ui/WeekChart';
 import { ScoreRing } from '@/components/ui/ScoreRing';
 import { SakuraAnimation } from '@/components/ui/SakuraAnimation';
-import { PulseGlow } from '@/components/ui/AnimeEffects';
+import { AnimeCompanion } from '@/components/ui/AnimeCompanion';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { useTimer } from '@/hooks/useTimer';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -29,24 +29,6 @@ export default function StatsScreen() {
   const totalWeekSessions = weekStats.reduce((a, d) => a + d.sessionsCompleted, 0);
   const totalWeekDistractions = weekStats.reduce((a, d) => a + d.distractions, 0);
 
-  const titleSlide = React.useRef(new Animated.Value(-30)).current;
-  const titleOpacity = React.useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    Animated.parallel([
-      Animated.timing(titleSlide, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.timing(titleOpacity, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [titleSlide, titleOpacity]);
-
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <LinearGradient
@@ -54,8 +36,7 @@ export default function StatsScreen() {
         style={StyleSheet.absoluteFill}
       />
       
-      <SakuraAnimation intensity="light" />
-      <PulseGlow color={Colors.neonPurple} size={300} intensity={0.08} />
+      <SakuraAnimation intensity="medium" />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -69,26 +50,12 @@ export default function StatsScreen() {
           />
         }
       >
-        <Animated.View
-          style={[
-            styles.header,
-            {
-              transform: [{ translateY: titleSlide }],
-              opacity: titleOpacity,
-            },
-          ]}
-        >
-          <View style={styles.titleRow}>
-            <View>
-              <Text style={styles.titleJapanese}>統計 - Statistics</Text>
-              <Text style={styles.title}>戦績 - Battle Record</Text>
-            </View>
-            <View style={styles.zenBadge}>
-              <Text style={styles.zenText}>禅</Text>
-            </View>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>Statistics</Text>
+            <Text style={styles.sub}>Your focus performance</Text>
           </View>
-          <Text style={styles.sub}>あなたの集中力の記録</Text>
-        </Animated.View>
+        </View>
 
         <View style={styles.todayCard}>
           <LinearGradient
@@ -99,10 +66,9 @@ export default function StatsScreen() {
           />
           <View style={styles.todayContent}>
             <View style={styles.todayLeft}>
-              <Text style={styles.todayLabelJapanese}>今日の得分</Text>
-              <Text style={styles.todayLabel}>TODAY'S SCORE</Text>
-              <Text style={styles.todayMinutes}>{todayMinutes} 分 focused</Text>
-              <Text style={styles.todayGoal}>目標: 240分 - 4時間</Text>
+              <Text style={styles.todayLabel}>{'TODAY\'S SCORE'}</Text>
+              <Text style={styles.todayMinutes}>{todayMinutes} min focused</Text>
+              <Text style={styles.todayGoal}>Goal: 240 min (4 hours)</Text>
               <View style={styles.progressTrack}>
                 <View
                   style={[
@@ -118,21 +84,21 @@ export default function StatsScreen() {
 
         <View style={styles.statsRow}>
           <StatCard
-            label="連勝"
+            label="Streak"
             value={`${streak}d`}
             icon="local-fire-department"
             accent={Colors.sakura}
-            sub="streak days"
+            sub="days"
           />
           <StatCard
-            label="今週"
+            label="This Week"
             value={`${Math.floor(totalWeekMinutes / 60)}h`}
             icon="schedule"
             accent={Colors.neonBlue}
             sub={`${totalWeekMinutes} min`}
           />
           <StatCard
-            label="セッション"
+            label="Sessions"
             value={`${totalWeekSessions}`}
             icon="check-circle"
             accent={Colors.success}
@@ -142,17 +108,16 @@ export default function StatsScreen() {
 
         <View style={styles.distractionsCard}>
           <View style={styles.distractionsLeft}>
-            <Text style={styles.distractionsLabelJapanese}>週間 分心</Text>
             <Text style={styles.distractionsLabel}>WEEKLY DISTRACTIONS</Text>
             <Text style={styles.distractionsValue}>{totalWeekDistractions}</Text>
             <Text style={styles.distractionsSub}>
               {totalWeekDistractions === 0
-                ? '完璧な集中 - Perfect focus achieved'
+                ? 'Perfect focus - zero distractions!'
                 : totalWeekDistractions < 5
-                ? 'よく管理されています - Well contained'
+                ? 'Well contained. Keep limiting interruptions.'
                 : totalWeekDistractions < 15
-                ? '中断を減らす功夫を - Consider a focus environment'
-                : '電話-Freeセッションを試す - Try phone-free sessions'}
+                ? 'Some interruptions - consider a focus environment.'
+                : 'High distraction count. Try phone-free sessions.'}
             </Text>
           </View>
           <View style={[styles.distractionsIcon, {
@@ -167,40 +132,44 @@ export default function StatsScreen() {
         </View>
 
         <View style={styles.chartCard}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.sectionTitleJapanese}>週間集中</Text>
-            <Text style={styles.sectionTitle}>Weekly Focus (分)</Text>
-          </View>
+          <Text style={styles.sectionTitle}>Weekly Focus (minutes)</Text>
           <WeekChart data={weekStats} />
         </View>
 
         <View style={styles.insightCard}>
-          <View style={styles.insightHeader}>
-            <Text style={styles.insightIcon}>智</Text>
-            <Text style={styles.insightTitle}>洞察 - Insight</Text>
-          </View>
+          <Text style={styles.insightTitle}>Insight</Text>
           <Text style={styles.insightBody}>
             {totalWeekMinutes === 0
-              ? '今週はまだセッションがありません。最初のポモドーロを始めて勢いを付けましょう。'
+              ? 'No sessions this week yet. Start your first Pomodoro to build momentum.'
               : totalWeekMinutes < 120
-              ? 'ゆっくりとしたスタート。1日2セッション完了を目標にしましょう。'
+              ? 'Off to a slow start. Aim for at least 2 completed sessions per day.'
               : totalWeekMinutes < 300
-              ? '良い進捗です！一貫した日課が最も深い習慣を築きます。'
-              : '素晴らしい週です！優れた集中力を身につえています。'}
+              ? 'Good progress! Consistent daily sessions build the deepest habits.'
+              : 'Strong week! You are building excellent focus discipline.'}
           </Text>
         </View>
 
         <View style={styles.quoteCard}>
           <Text style={styles.quoteJapanese}>
-            "継続は力なり"
+            {'"'}継続は力なり{'"'}
           </Text>
           <Text style={styles.quoteEnglish}>
-            "Constancy sharpens skill"
+            {'"'}Constancy sharpens skill{'"'}
           </Text>
         </View>
 
         <View style={{ height: Spacing.xxl }} />
       </ScrollView>
+
+      <AnimeCompanion
+        state={{
+          currentScreen: 'stats',
+          todayMinutes: todayMinutes,
+          streak: streak,
+          distractionCount: totalWeekDistractions,
+          isActive: true,
+        }}
+      />
     </View>
   );
 }
@@ -217,17 +186,6 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: Spacing.lg,
   },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  titleJapanese: {
-    fontSize: FontSize.xxs,
-    color: Colors.sakura,
-    letterSpacing: 2,
-    marginBottom: 2,
-  },
   title: {
     fontSize: FontSize.xxl,
     fontWeight: FontWeight.bold,
@@ -237,21 +195,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.textMuted,
     marginTop: 4,
-  },
-  zenBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.goldMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.gold + '40',
-  },
-  zenText: {
-    fontSize: FontSize.xl,
-    color: Colors.gold,
-    fontWeight: FontWeight.bold,
   },
   todayCard: {
     borderRadius: Radius.lg,
@@ -269,11 +212,6 @@ const styles = StyleSheet.create({
   todayLeft: {
     flex: 1,
     marginRight: Spacing.lg,
-  },
-  todayLabelJapanese: {
-    fontSize: FontSize.xxs,
-    color: Colors.sakura,
-    marginBottom: 2,
   },
   todayLabel: {
     fontSize: FontSize.xs,
@@ -318,13 +256,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  chartHeader: {
+  sectionTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
     marginBottom: Spacing.sm,
-  },
-  sectionTitleJapanese: {
-    fontSize: FontSize.xxs,
-    color: Colors.sakura,
-    marginBottom: 2,
   },
   distractionsCard: {
     backgroundColor: Colors.surface,
@@ -340,11 +278,6 @@ const styles = StyleSheet.create({
   distractionsLeft: {
     flex: 1,
     marginRight: Spacing.md,
-  },
-  distractionsLabelJapanese: {
-    fontSize: FontSize.xxs,
-    color: Colors.sakura,
-    marginBottom: 2,
   },
   distractionsLabel: {
     fontSize: FontSize.xs,
@@ -372,13 +305,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionTitle: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
   insightCard: {
     backgroundColor: Colors.ink,
     borderRadius: Radius.lg,
@@ -387,20 +313,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.neonPurple + '30',
   },
-  insightHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  insightIcon: {
-    fontSize: FontSize.lg,
-    color: Colors.neonPurple,
-  },
   insightTitle: {
     fontSize: FontSize.md,
     fontWeight: FontWeight.bold,
     color: Colors.neonPurple,
+    marginBottom: Spacing.sm,
   },
   insightBody: {
     fontSize: FontSize.sm,

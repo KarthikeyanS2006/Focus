@@ -1,5 +1,5 @@
 // Powered by Sakura Focus - Japanese Anime Style
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,21 +7,32 @@ import {
   TouchableOpacity,
   ScrollView,
   Pressable,
-  Animated,
-  Dimensions,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { useTimer } from '@/hooks/useTimer';
 import { CircularTimer } from '@/components/ui/CircularTimer';
 import { AbandonModal } from '@/components/ui/AbandonModal';
+import { DistractionModal } from '@/components/ui/DistractionModal';
 import { SakuraAnimation } from '@/components/ui/SakuraAnimation';
-import { PulseGlow, EnergyOrb } from '@/components/ui/AnimeEffects';
+import { AnimeCompanion } from '@/components/ui/AnimeCompanion';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { useStats } from '@/hooks/useStats';
+import { DistractionLog } from '@/types';
+import { getUserProfile } from '@/services/storageService';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GOALS = [
+  'Studying',
+  'Working',
+  'Reading',
+  'Writing',
+  'Coding',
+  'Learning',
+  'Other',
+];
 
 export default function TimerScreen() {
   const insets = useSafeAreaInsets();
@@ -33,38 +44,53 @@ export default function TimerScreen() {
     streak,
     penaltyActive,
     distractionCount,
+    sessionGoal,
     startTimer,
     pauseTimer,
     abandonSession,
     skipBreak,
-    logDistraction,
+    logDistractionWithCategory,
+    setSessionGoal,
     totalSeconds,
   } = useTimer();
 
-  const { refresh } = useStats();
+  const { refresh, todayMinutes } = useStats();
   const [showAbandon, setShowAbandon] = useState(false);
+  const [showDistraction, setShowDistraction] = useState(false);
+  const [showGoalModal, setShowGoalModal] = useState(false);
+
+  const FOCUS_TIPS = [
+    "Put your phone face-down. Interruptions reset your focus habit.",
+    "Sit quietly, breathe deep, and clear your mind before starting.",
+    "Keep your phone in another room to avoid temptation.",
+    "Create a calm environment: sit comfortably and focus.",
+    "A clean workspace helps a clear mind - prepare your area first!",
+  ];
+  const [currentTipIndex, setCurrentTipIndex] = useState(0);
+
+  useEffect(() => {
+    if (phase === 'idle') {
+      setCurrentTipIndex(Math.floor(Math.random() * FOCUS_TIPS.length));
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    const checkAndShowWelcome = async () => {
+      const profile = await getUserProfile();
+      if (profile.isNewUser) {
+        router.replace('/welcome');
+      }
+    };
+    checkAndShowWelcome();
+  }, []);
 
   const progress = phase === 'idle' ? 0 : 1 - secondsLeft / totalSeconds;
 
-  const headerSlide = useRef(new Animated.Value(-50)).current;
-  const headerOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(headerSlide, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(headerOpacity, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [headerSlide, headerOpacity]);
-
   const handleMainAction = useCallback(() => {
+    if (phase === 'idle' && !sessionGoal) {
+      setShowGoalModal(true);
+      return;
+    }
     if (phase === 'idle') {
       startTimer();
     } else if (isRunning) {
@@ -72,7 +98,7 @@ export default function TimerScreen() {
     } else {
       startTimer();
     }
-  }, [phase, isRunning, startTimer, pauseTimer]);
+  }, [phase, isRunning, startTimer, pauseTimer, sessionGoal]);
 
   const handleAbandonConfirm = useCallback(async () => {
     setShowAbandon(false);
@@ -80,23 +106,32 @@ export default function TimerScreen() {
     refresh();
   }, [abandonSession, refresh]);
 
+  const handleLogDistraction = useCallback((log: DistractionLog) => {
+    logDistractionWithCategory(log);
+    setShowDistraction(false);
+  }, [logDistractionWithCategory]);
+
+  const handleSelectGoal = useCallback((goal: string) => {
+    setSessionGoal(goal);
+    setShowGoalModal(false);
+  }, [setSessionGoal]);
+
   const mainBtnLabel =
-    phase === 'idle' ? '開始 - Start' : isRunning ? '一時停止 - Pause' : '再開 - Resume';
+    phase === 'idle' ? 'Start Focus' : isRunning ? 'Pause' : 'Resume';
 
   const mainBtnIcon: keyof typeof MaterialIcons.glyphMap =
     phase === 'idle' ? 'play-arrow' : isRunning ? 'pause' : 'play-arrow';
 
   const phaseText =
     phase === 'idle'
-      ? '集中してください - Stay focused'
+      ? sessionGoal
+        ? `Goal: ${sessionGoal}`
+        : 'Set your focus goal'
       : phase === 'focus'
       ? isRunning
-        ? '心を込めて - Give your best'
-        : '休憩しますか？ - Take a break?'
-      : 'リラックス - Relax';
-
-  const phaseJapanese =
-    phase === 'idle' ? '準備完了' : phase === 'focus' ? '集中' : '休憩';
+        ? 'Stay focused. You got this!'
+        : 'Paused - resume when ready'
+      : 'Take a break and relax';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -105,48 +140,39 @@ export default function TimerScreen() {
         style={StyleSheet.absoluteFill}
       />
       
-      <SakuraAnimation intensity="medium" />
-      
-      {isRunning && phase === 'focus' && (
-        <PulseGlow
-          color={Colors.primary}
-          size={320}
-          intensity={0.15}
-        />
-      )}
+      <SakuraAnimation intensity="heavy" />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View
-          style={[
-            styles.header,
-            {
-              transform: [{ translateY: headerSlide }],
-              opacity: headerOpacity,
-            },
-          ]}
-        >
-          <View style={styles.titleContainer}>
-            <Text style={styles.appTitleJapanese}>桜 花 计时</Text>
+        <View style={styles.header}>
+          <View>
             <Text style={styles.appTitle}>Sakura Focus</Text>
-            <Text style={styles.appSub}>武士道ポモドーロ - Samurai Pomodoro</Text>
+            <Text style={styles.appSub}>Japanese Pomodoro Timer</Text>
           </View>
-          <View style={styles.streakBadge}>
-            <MaterialIcons name="local-fire-department" size={18} color={Colors.sakura} />
-            <Text style={styles.streakText}>{streak}</Text>
-            <Text style={styles.streakLabel}>連勝</Text>
+          <View style={styles.headerRight}>
+            <View style={styles.streakBadge}>
+              <MaterialIcons name="local-fire-department" size={18} color={Colors.sakura} />
+              <Text style={styles.streakText}>{streak}</Text>
+              <Text style={styles.streakLabel}>streak</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.adminBtn}
+              onPress={() => router.push('/settings')}
+            >
+              <MaterialIcons name="settings" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
 
         {penaltyActive ? (
-          <Animated.View style={styles.penaltyBanner}>
+          <View style={styles.penaltyBanner}>
             <MaterialIcons name="warning" size={16} color={Colors.danger} />
             <Text style={styles.penaltyText}>
-              気が散りました - Distraction logged
+              Distraction logged - stay focused
             </Text>
-          </Animated.View>
+          </View>
         ) : null}
 
         <View style={styles.roundRow}>
@@ -158,24 +184,14 @@ export default function TimerScreen() {
                 r <= currentRound && phase !== 'idle' && styles.roundDotActive,
                 r < currentRound && styles.roundDotDone,
               ]}
-            >
-              {r <= currentRound && phase !== 'idle' && (
-                <View style={styles.roundDotInner} />
-              )}
-            </View>
+            />
           ))}
           <Text style={styles.roundLabel}>
-            ラウンド {currentRound}/4 - Round {currentRound} of 4
+            Round {currentRound} of 4
           </Text>
         </View>
 
         <View style={styles.timerWrapper}>
-          <View style={styles.katanaDecoration}>
-            <View style={styles.katanaLine} />
-            <Text style={styles.katanaText}>刀</Text>
-            <View style={styles.katanaLine} />
-          </View>
-          
           <CircularTimer
             progress={progress}
             secondsLeft={secondsLeft}
@@ -183,15 +199,21 @@ export default function TimerScreen() {
             isRunning={isRunning}
             size={280}
           />
-          
-          <View style={styles.phaseBadge}>
-            <Text style={styles.phaseBadgeText}>{phaseJapanese}</Text>
-          </View>
         </View>
 
         <Text style={styles.phaseMessage}>
           {phaseText}
         </Text>
+
+        {phase === 'idle' && sessionGoal ? (
+          <TouchableOpacity 
+            style={styles.changeGoalBtn}
+            onPress={() => setShowGoalModal(true)}
+          >
+            <MaterialIcons name="edit" size={16} color={Colors.primary} />
+            <Text style={styles.changeGoalText}>Change Goal</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <Pressable
           style={({ pressed }) => [
@@ -215,9 +237,6 @@ export default function TimerScreen() {
             <MaterialIcons name={mainBtnIcon} size={28} color={Colors.white} />
             <Text style={styles.mainBtnText}>{mainBtnLabel}</Text>
           </View>
-          {phase === 'focus' && isRunning && (
-            <EnergyOrb color={Colors.gold} size={30} isActive={true} />
-          )}
         </Pressable>
 
         {phase !== 'idle' ? (
@@ -229,11 +248,11 @@ export default function TimerScreen() {
                   styles.secondaryBtnDistraction,
                   pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] },
                 ]}
-                onPress={logDistraction}
+                onPress={() => setShowDistraction(true)}
               >
                 <MaterialIcons name="add" size={18} color={Colors.primary} />
                 <Text style={[styles.secondaryBtnText, { color: Colors.primary }]}>
-                  分心 {distractionCount > 0 ? `· ${distractionCount}` : ''}
+                  Distraction{distractionCount > 0 ? ` (${distractionCount})` : ''}
                 </Text>
               </Pressable>
             ) : null}
@@ -244,7 +263,7 @@ export default function TimerScreen() {
                 activeOpacity={0.75}
               >
                 <MaterialIcons name="skip-next" size={18} color={Colors.textSecondary} />
-                <Text style={styles.secondaryBtnText}>休憩をスキップ</Text>
+                <Text style={styles.secondaryBtnText}>Skip Break</Text>
               </TouchableOpacity>
             ) : null}
             <TouchableOpacity
@@ -254,7 +273,7 @@ export default function TimerScreen() {
             >
               <MaterialIcons name="stop" size={18} color={Colors.danger} />
               <Text style={[styles.secondaryBtnText, { color: Colors.danger }]}>
-                中止
+                Abandon
               </Text>
             </TouchableOpacity>
           </View>
@@ -262,22 +281,22 @@ export default function TimerScreen() {
 
         <View style={styles.tipCard}>
           <View style={styles.tipIcon}>
-            <Text style={styles.tipIconText}>禅</Text>
+            <Text style={styles.tipIconText}>TIP</Text>
           </View>
           <View style={styles.tipContent}>
-            <Text style={styles.tipTitle}>心の保ち方</Text>
+            <Text style={styles.tipTitle}>Focus Tip</Text>
             <Text style={styles.tipText}>
-              電話を伏せて置いてください - Put your phone face-down. Interruptions reset your focus.
+              {FOCUS_TIPS[currentTipIndex]}
             </Text>
           </View>
         </View>
 
-        <View style={styles.motivationCard}>
-          <Text style={styles.motivationJapanese}>
-            一生懸命働くことは、最高のリハビリである
+        <View style={styles.quoteCard}>
+          <Text style={styles.quoteJapanese}>
+            {'"'}継続は力なり{'"'}
           </Text>
-          <Text style={styles.motivationEnglish}>
-            "Hard work is the best rehab"
+          <Text style={styles.quoteEnglish}>
+            {'"'}Constancy sharpens skill{'"'}
           </Text>
         </View>
 
@@ -288,6 +307,74 @@ export default function TimerScreen() {
         visible={showAbandon}
         onConfirm={handleAbandonConfirm}
         onCancel={() => setShowAbandon(false)}
+      />
+
+      <DistractionModal
+        visible={showDistraction}
+        onClose={() => setShowDistraction(false)}
+        onLog={handleLogDistraction}
+      />
+
+      <Modal
+        visible={showGoalModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowGoalModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowGoalModal(false)}>
+          <Pressable style={styles.goalModal} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>What are you focusing on?</Text>
+              <TouchableOpacity onPress={() => setShowGoalModal(false)}>
+                <MaterialIcons name="close" size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.goalsGrid}>
+              {GOALS.map((goal) => (
+                <TouchableOpacity
+                  key={goal}
+                  style={[
+                    styles.goalBtn,
+                    sessionGoal === goal && styles.goalBtnSelected,
+                  ]}
+                  onPress={() => handleSelectGoal(goal)}
+                >
+                  <MaterialIcons
+                    name={
+                      goal === 'Studying' ? 'school' :
+                      goal === 'Working' ? 'work' :
+                      goal === 'Reading' ? 'menu-book' :
+                      goal === 'Writing' ? 'edit' :
+                      goal === 'Coding' ? 'code' :
+                      goal === 'Learning' ? 'psychology' : 'more-horiz'
+                    }
+                    size={24}
+                    color={sessionGoal === goal ? Colors.white : Colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.goalBtnText,
+                      sessionGoal === goal && styles.goalBtnTextSelected,
+                    ]}
+                  >
+                    {goal}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <AnimeCompanion
+        state={{
+          currentScreen: 'focus',
+          todayMinutes: todayMinutes,
+          streak: streak,
+          distractionCount: distractionCount,
+          sessionGoal: sessionGoal,
+          isActive: true,
+        }}
       />
     </View>
   );
@@ -308,15 +395,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: Spacing.lg,
   },
-  titleContainer: {
-    flex: 1,
-  },
-  appTitleJapanese: {
-    fontSize: FontSize.xxs,
-    color: Colors.sakura,
-    letterSpacing: 8,
-    marginBottom: 2,
-    fontWeight: FontWeight.regular,
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
   },
   appTitle: {
     fontSize: FontSize.xl,
@@ -334,7 +416,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.sakuraMuted || Colors.primaryMuted,
+    backgroundColor: Colors.sakuraMuted,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
     borderRadius: Radius.full,
@@ -350,6 +432,16 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.sakura,
     marginLeft: 2,
+  },
+  adminBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   penaltyBanner: {
     flexDirection: 'row',
@@ -381,8 +473,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
     borderWidth: 2,
     borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   roundDotActive: {
     backgroundColor: Colors.primaryMuted,
@@ -392,64 +482,33 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
-  roundDotInner: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.sakura,
-  },
   roundLabel: {
     fontSize: FontSize.xs,
     color: Colors.textMuted,
     marginLeft: Spacing.xs,
     fontWeight: FontWeight.medium,
-    letterSpacing: 0.5,
   },
   timerWrapper: {
     alignItems: 'center',
     marginBottom: Spacing.xl,
   },
-  katanaDecoration: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
-    width: '60%',
-    justifyContent: 'center',
-  },
-  katanaLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.primary,
-    opacity: 0.5,
-  },
-  katanaText: {
-    fontSize: FontSize.lg,
-    color: Colors.primary,
-    marginHorizontal: Spacing.md,
-    fontWeight: FontWeight.bold,
-  },
-  phaseBadge: {
-    marginTop: Spacing.md,
-    backgroundColor: Colors.primaryMuted,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.xs,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.primary + '40',
-  },
-  phaseBadgeText: {
-    fontSize: FontSize.sm,
-    color: Colors.primary,
-    fontWeight: FontWeight.bold,
-    letterSpacing: 2,
-  },
   phaseMessage: {
     fontSize: FontSize.md,
     color: Colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: Spacing.xl,
-    fontStyle: 'italic',
+    marginBottom: Spacing.sm,
+  },
+  changeGoalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  changeGoalText: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    fontWeight: FontWeight.medium,
   },
   mainBtn: {
     borderRadius: Radius.xl,
@@ -476,7 +535,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.lg,
     fontWeight: FontWeight.bold,
     color: Colors.white,
-    letterSpacing: 1,
   },
   secondaryRow: {
     flexDirection: 'row',
@@ -528,7 +586,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tipIconText: {
-    fontSize: FontSize.lg,
+    fontSize: 10,
     color: Colors.gold,
     fontWeight: FontWeight.bold,
   },
@@ -545,9 +603,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
-    lineHeight: 20,
   },
-  motivationCard: {
+  quoteCard: {
     backgroundColor: Colors.ink,
     borderRadius: Radius.lg,
     padding: Spacing.lg,
@@ -555,18 +612,71 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary + '30',
     alignItems: 'center',
   },
-  motivationJapanese: {
+  quoteJapanese: {
     fontSize: FontSize.md,
     color: Colors.sakura,
     fontWeight: FontWeight.medium,
     textAlign: 'center',
     marginBottom: Spacing.xs,
-    letterSpacing: 1,
   },
-  motivationEnglish: {
+  quoteEnglish: {
     fontSize: FontSize.sm,
     color: Colors.textMuted,
     fontStyle: 'italic',
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
+  },
+  goalModal: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  goalsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  goalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.primaryMuted,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.primary + '40',
+    minWidth: '45%',
+  },
+  goalBtnSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  goalBtnText: {
+    fontSize: FontSize.md,
+    color: Colors.primary,
+    fontWeight: FontWeight.medium,
+  },
+  goalBtnTextSelected: {
+    color: Colors.white,
   },
 });

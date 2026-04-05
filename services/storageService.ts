@@ -1,11 +1,13 @@
 // Powered by OnSpace.AI
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Session, DailyStats } from '@/types';
+import { Session, DailyStats, BlockedApp, UserProfile, DEFAULT_BLOCKED_APPS } from '@/types';
 
 const KEYS = {
   sessions: 'focus_sessions',
   streak: 'focus_streak',
   lastStreakDate: 'focus_last_streak_date',
+  blockedApps: 'focus_blocked_apps',
+  userProfile: 'focus_user_profile',
 };
 
 export async function getSessions(): Promise<Session[]> {
@@ -19,7 +21,7 @@ export async function getSessions(): Promise<Session[]> {
 
 export async function saveSession(session: Session): Promise<void> {
   const existing = await getSessions();
-  const updated = [session, ...existing].slice(0, 200); // keep last 200
+  const updated = [session, ...existing].slice(0, 200);
   await AsyncStorage.setItem(KEYS.sessions, JSON.stringify(updated));
 }
 
@@ -38,7 +40,7 @@ export async function updateStreak(): Promise<number> {
   const currentStreak = await getStreak();
 
   if (lastDate === today) {
-    return currentStreak; // already counted today
+    return currentStreak;
   }
 
   const yesterday = new Date();
@@ -118,6 +120,76 @@ export function getTodayFocusMinutes(sessions: Session[]): number {
 }
 
 export function getDailyScore(focusMinutes: number): number {
-  // Max score 100 at 4 hours (240 min) of focus
   return Math.min(100, Math.round((focusMinutes / 240) * 100));
+}
+
+export async function getBlockedApps(): Promise<BlockedApp[]> {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.blockedApps);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+    const defaultApps = DEFAULT_BLOCKED_APPS.map((app, index) => ({
+      ...app,
+      id: `blocked_${Date.now()}_${index}`,
+    }));
+    await AsyncStorage.setItem(KEYS.blockedApps, JSON.stringify(defaultApps));
+    return defaultApps;
+  } catch {
+    return [];
+  }
+}
+
+export async function saveBlockedApps(apps: BlockedApp[]): Promise<void> {
+  await AsyncStorage.setItem(KEYS.blockedApps, JSON.stringify(apps));
+}
+
+export async function addBlockedApp(app: Omit<BlockedApp, 'id'>): Promise<BlockedApp[]> {
+  const apps = await getBlockedApps();
+  const newApp: BlockedApp = {
+    ...app,
+    id: `blocked_${Date.now()}`,
+  };
+  const updated = [...apps, newApp];
+  await saveBlockedApps(updated);
+  return updated;
+}
+
+export async function removeBlockedApp(id: string): Promise<BlockedApp[]> {
+  const apps = await getBlockedApps();
+  const updated = apps.filter((app) => app.id !== id);
+  await saveBlockedApps(updated);
+  return updated;
+}
+
+export async function getUserProfile(): Promise<UserProfile> {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.userProfile);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+    return {
+      name: '',
+      isNewUser: true,
+      createdAt: new Date().toISOString(),
+      dailyGoalMinutes: 120,
+    };
+  } catch {
+    return {
+      name: '',
+      isNewUser: true,
+      createdAt: new Date().toISOString(),
+      dailyGoalMinutes: 120,
+    };
+  }
+}
+
+export async function saveUserProfile(profile: UserProfile): Promise<void> {
+  await AsyncStorage.setItem(KEYS.userProfile, JSON.stringify(profile));
+}
+
+export async function setUserAsReturning(): Promise<void> {
+  const profile = await getUserProfile();
+  profile.isNewUser = false;
+  await saveUserProfile(profile);
 }

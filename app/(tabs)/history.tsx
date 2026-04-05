@@ -1,13 +1,13 @@
-// Powered by Sakura Focus - Japanese Anime Style
+// Powered by Sakura Focus - English Version
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useStats } from '@/hooks/useStats';
 import { SakuraAnimation } from '@/components/ui/SakuraAnimation';
-import { PulseGlow } from '@/components/ui/AnimeEffects';
+import { AnimeCompanion } from '@/components/ui/AnimeCompanion';
 import { Session } from '@/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 
@@ -22,34 +22,14 @@ function formatDate(isoStr: string) {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
 
-  if (d.toDateString() === today) return '今日 - Today';
-  if (d.toDateString() === yesterday.toDateString()) return '昨日 - Yesterday';
+  if (d.toDateString() === today) return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-function SessionItem({ session, index }: { session: Session; index: number }) {
+function SessionItem({ session }: { session: Session }) {
   const isCompleted = session.status === 'completed';
   const isFocus = session.phase === 'focus';
-  
-  const slideAnim = React.useRef(new Animated.Value(50)).current;
-  const opacityAnim = React.useRef(new Animated.Value(0)).current;
-  
-  React.useEffect(() => {
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
-        delay: index * 50,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 1,
-        duration: 300,
-        delay: index * 50,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [slideAnim, opacityAnim, index]);
 
   const iconName: keyof typeof MaterialIcons.glyphMap = isCompleted
     ? isFocus
@@ -60,27 +40,18 @@ function SessionItem({ session, index }: { session: Session; index: number }) {
   const iconColor = isCompleted ? (isFocus ? Colors.primary : Colors.success) : Colors.danger;
 
   return (
-    <Animated.View
-      style={[
-        styles.sessionItem, 
-        session.penalty && styles.sessionItemPenalty,
-        {
-          transform: [{ translateX: slideAnim }],
-          opacity: opacityAnim,
-        },
-      ]}
-    >
+    <View style={[styles.sessionItem, session.penalty && styles.sessionItemPenalty]}>
       <View style={[styles.sessionIcon, { backgroundColor: iconColor + '18' }]}>
         <MaterialIcons name={iconName} size={20} color={iconColor} />
       </View>
       <View style={styles.sessionInfo}>
         <View style={styles.sessionRow}>
           <Text style={styles.sessionType}>
-            {isFocus ? '集中セッション' : '休憩セッション'}
+            {isFocus ? 'Focus Session' : 'Break Session'}
           </Text>
           {session.penalty ? (
             <View style={styles.penaltyTag}>
-              <Text style={styles.penaltyTagText}>罰</Text>
+              <Text style={styles.penaltyTagText}>PENALTY</Text>
             </View>
           ) : null}
           {isFocus && (session.distractionCount ?? 0) > 0 ? (
@@ -91,39 +62,21 @@ function SessionItem({ session, index }: { session: Session; index: number }) {
           ) : null}
         </View>
         <Text style={styles.sessionMeta}>
-          {formatDate(session.date)} · {formatTime(session.date)} · {session.durationMinutes}分
+          {formatDate(session.date)} - {formatTime(session.date)} - {session.durationMinutes} min
         </Text>
       </View>
       <View style={styles.sessionStatus}>
         <Text style={[styles.sessionStatusText, { color: isCompleted ? iconColor : Colors.danger }]}>
-          {isCompleted ? '完了' : '中止'}
+          {isCompleted ? 'Done' : 'Quit'}
         </Text>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const { sessions, loading, refresh } = useStats();
-
-  const titleSlide = React.useRef(new Animated.Value(-30)).current;
-  const titleOpacity = React.useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    Animated.parallel([
-      Animated.timing(titleSlide, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.timing(titleOpacity, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [titleSlide, titleOpacity]);
 
   useFocusEffect(
     useCallback(() => {
@@ -138,41 +91,30 @@ export default function HistoryScreen() {
         style={StyleSheet.absoluteFill}
       />
       
-      <SakuraAnimation intensity="light" />
-      <PulseGlow color={Colors.neonGreen} size={250} intensity={0.06} />
+      <SakuraAnimation intensity="medium" />
 
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            transform: [{ translateY: titleSlide }],
-            opacity: titleOpacity,
-          },
-        ]}
-      >
-        <Text style={styles.titleJapanese}>歴史 - History</Text>
-        <Text style={styles.title}>セッション履歴</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Session History</Text>
         <Text style={styles.sub}>
-          {sessions.length} 総セッション - Total sessions
+          {sessions.length} total sessions
         </Text>
-      </Animated.View>
+      </View>
 
       {sessions.length === 0 ? (
         <View style={styles.empty}>
           <View style={styles.emptyIcon}>
-            <Text style={styles.emptyIconText}>無</Text>
+            <Text style={styles.emptyIconText}>0</Text>
           </View>
-          <Text style={styles.emptyTitle}>まだセッションがありません</Text>
-          <Text style={styles.emptyTitleEnglish}>No sessions yet</Text>
+          <Text style={styles.emptyTitle}>No sessions yet</Text>
           <Text style={styles.emptyBody}>
-            最初の集中セッションを完了して、ここに履歴を表示しましょう。
+            Complete your first focus session to see your history here.
           </Text>
         </View>
       ) : (
         <FlatList
           data={sessions}
           keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => <SessionItem session={item} index={index} />}
+          renderItem={({ item }) => <SessionItem session={item} />}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -186,6 +128,16 @@ export default function HistoryScreen() {
           ListFooterComponent={<View style={{ height: Spacing.xxl }} />}
         />
       )}
+
+      <AnimeCompanion
+        state={{
+          currentScreen: 'history',
+          todayMinutes: 0,
+          streak: 0,
+          distractionCount: 0,
+          isActive: true,
+        }}
+      />
     </View>
   );
 }
@@ -199,12 +151,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.md,
-  },
-  titleJapanese: {
-    fontSize: FontSize.xxs,
-    color: Colors.sakura,
-    letterSpacing: 2,
-    marginBottom: 2,
   },
   title: {
     fontSize: FontSize.xxl,
@@ -267,7 +213,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: FontWeight.bold,
     color: Colors.danger,
-    letterSpacing: 0.5,
   },
   distractionTag: {
     flexDirection: 'row',
@@ -284,7 +229,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: FontWeight.bold,
     color: Colors.primary,
-    letterSpacing: 0.5,
   },
   sessionMeta: {
     fontSize: FontSize.xs,
@@ -295,14 +239,13 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     fontWeight: FontWeight.bold,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   empty: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
   emptyIcon: {
     width: 80,
@@ -325,16 +268,10 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
   },
-  emptyTitleEnglish: {
-    fontSize: FontSize.md,
-    color: Colors.textMuted,
-    textAlign: 'center',
-  },
   emptyBody: {
     fontSize: FontSize.sm,
     color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
-    marginTop: Spacing.xs,
   },
 });
