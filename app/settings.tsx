@@ -1,10 +1,12 @@
 // Powered by Sakura Focus - Settings Screen
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Switch, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import * as Speech from 'expo-speech';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { BlockedApp, DISTRACTION_CATEGORIES, DistractionCategory } from '@/types';
 import { getBlockedApps, addBlockedApp, removeBlockedApp, getUserProfile, saveUserProfile } from '@/services/storageService';
@@ -18,6 +20,10 @@ export default function SettingsScreen() {
   const [newAppCategory, setNewAppCategory] = useState<DistractionCategory>('other');
   const [userName, setUserName] = useState('');
   const [dailyGoal, setDailyGoal] = useState('120');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [hasNotificationPermission, setHasNotificationPermission] = useState(false);
 
   const loadData = useCallback(async () => {
     const apps = await getBlockedApps();
@@ -29,7 +35,53 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     loadData();
+    checkNotificationPermission();
   }, [loadData]);
+
+  const checkNotificationPermission = async () => {
+    const { status } = await Notifications.getPermissionsAsync();
+    setHasNotificationPermission(status === 'granted');
+  };
+
+  const requestNotificationPermission = async () => {
+    const { status } = await Notifications.requestPermissionsAsync();
+    setHasNotificationPermission(status === 'granted');
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please enable notifications in your device settings.');
+    }
+  };
+
+  const handleTestSpeech = () => {
+    Speech.speak("Hello! Stay focused and achieve your goals!", {
+      language: 'en-US',
+      pitch: 1.0,
+      rate: 0.9,
+    });
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: '🌸 Regain - Focus Timer & App Blocker\n\nStruggling with phone addiction? Take back control with Regain!\n\n- Focus Timer with Pomodoro\n- App Blocker\n- Screen Time Tracker\n- Multiplayer Focus Mode\n\nDownload now and reduce screen time by 25%!',
+        title: 'Regain - Focus Timer',
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to share');
+    }
+  };
+
+  const handleRateApp = () => {
+    Alert.alert(
+      'Rate App',
+      'If you enjoy Regain, please take a moment to rate us! Your feedback helps us improve.',
+      [
+        { text: 'Later', style: 'cancel' },
+        { text: 'Rate Now', onPress: () => {
+          Alert.alert('Thank you!', 'We appreciate your support!');
+        }},
+      ]
+    );
+  };
 
   const handleRemoveApp = async (id: string, name: string) => {
     Alert.alert(
@@ -186,6 +238,104 @@ export default function SettingsScreen() {
               <Text style={styles.aboutLabel}>Built with</Text>
               <Text style={styles.aboutValue}>Expo + React Native</Text>
             </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Notifications</Text>
+          <View style={styles.card}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <MaterialIcons name="notifications" size={24} color={Colors.primary} />
+                <View style={styles.settingText}>
+                  <Text style={styles.settingLabel}>Push Notifications</Text>
+                  <Text style={styles.settingDesc}>Get notified when timer ends</Text>
+                </View>
+              </View>
+              <Switch
+                value={notificationsEnabled}
+                onValueChange={setNotificationsEnabled}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+                thumbColor={Colors.white}
+              />
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <MaterialIcons name="volume-up" size={24} color={Colors.primary} />
+                <View style={styles.settingText}>
+                  <Text style={styles.settingLabel}>Sound</Text>
+                  <Text style={styles.settingDesc}>Play sound on timer complete</Text>
+                </View>
+              </View>
+              <Switch
+                value={soundEnabled}
+                onValueChange={setSoundEnabled}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+                thumbColor={Colors.white}
+              />
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <MaterialIcons name="record-voice-over" size={24} color={Colors.primary} />
+                <View style={styles.settingText}>
+                  <Text style={styles.settingLabel}>Voice Notifications</Text>
+                  <Text style={styles.settingDesc}>Speak timer status</Text>
+                </View>
+              </View>
+              <Switch
+                value={voiceEnabled}
+                onValueChange={(val) => {
+                  setVoiceEnabled(val);
+                  if (val && !hasNotificationPermission) {
+                    requestNotificationPermission();
+                  }
+                  if (val) {
+                    handleTestSpeech();
+                  }
+                }}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+                thumbColor={Colors.white}
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Share & Rate</Text>
+          <View style={styles.card}>
+            <Pressable style={styles.actionRow} onPress={handleShare}>
+              <View style={styles.settingInfo}>
+                <MaterialIcons name="share" size={24} color={Colors.primary} />
+                <Text style={styles.settingLabel}>Share App</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={Colors.textMuted} />
+            </Pressable>
+            <View style={styles.divider} />
+            <Pressable style={styles.actionRow} onPress={handleRateApp}>
+              <View style={styles.settingInfo}>
+                <MaterialIcons name="star" size={24} color={Colors.gold} />
+                <Text style={styles.settingLabel}>Rate Us</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={Colors.textMuted} />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>About Regain</Text>
+          <View style={styles.card}>
+            <Text style={styles.aboutText}>
+              🌸 Regain - Study Timer for Focus{'\n'}
+              Reduce screen time by 25% in your first week!{'\n\n'}
+              • Focus Timer with Pomodoro{'\n'}
+              • App Blocker with Strict Mode{'\n'}
+              • Block Reels & Shorts{'\n'}
+              • Screen Time Tracker{'\n'}
+              • Multiplayer Focus Rooms{'\n\n'}
+              Built with 💜 for better digital habits.
+            </Text>
           </View>
         </View>
 
@@ -488,5 +638,41 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     color: Colors.white,
     fontWeight: FontWeight.bold,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.sm,
+  },
+  settingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    flex: 1,
+  },
+  settingText: {
+    flex: 1,
+  },
+  settingLabel: {
+    fontSize: FontSize.md,
+    color: Colors.textPrimary,
+    fontWeight: FontWeight.medium,
+  },
+  settingDesc: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.sm,
+  },
+  aboutText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    lineHeight: 22,
   },
 });
