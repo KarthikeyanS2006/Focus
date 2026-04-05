@@ -34,14 +34,15 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
   const [isWalking, setIsWalking] = useState(false);
   const [showFocusTip, setShowFocusTip] = useState(false);
   const [currentTip, setCurrentTip] = useState('');
-  const [legPhase, setLegPhase] = useState(0);
+  const [walkCycle, setWalkCycle] = useState(0);
+  const [bodyBob, setBodyBob] = useState(0);
   
   const characterX = useRef(new Animated.Value(0)).current;
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const walkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const walkDirectionRef = useRef<'right' | 'left'>('right');
   const isWalkingRef = useRef(false);
-  const legAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const walkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const jumpAnim = useRef(new Animated.Value(0)).current;
@@ -62,13 +63,14 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
       clearTimeout(walkTimeoutRef.current);
       walkTimeoutRef.current = null;
     }
-    if (legAnimRef.current) {
-      clearInterval(legAnimRef.current);
-      legAnimRef.current = null;
+    if (walkIntervalRef.current) {
+      clearInterval(walkIntervalRef.current);
+      walkIntervalRef.current = null;
     }
     setIsWalking(false);
     isWalkingRef.current = false;
-    setLegPhase(0);
+    setWalkCycle(0);
+    setBodyBob(0);
     Animated.spring(characterX, {
       toValue: 0,
       friction: 8,
@@ -85,52 +87,39 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     walkDirectionRef.current = 'right';
     characterX.setValue(0);
     flipAnim.setValue(1);
-    
-    legAnimRef.current = setInterval(() => {
-      setLegPhase(p => (p + 1) % 4);
-    }, 300);
-    
-    const walkStep = () => {
-      if (!isWalkingRef.current) return;
-      
-      if (walkDirectionRef.current === 'right') {
-        Animated.timing(characterX, {
-          toValue: SCREEN_WIDTH - 140,
-          duration: 4000,
-          easing: Easing.linear,
-          useNativeDriver: false,
-        }).start(({ finished }) => {
-          if (finished && isWalkingRef.current) {
-            Animated.timing(flipAnim, {
-              toValue: -1,
-              duration: 300,
-              useNativeDriver: false,
-            }).start();
-            walkDirectionRef.current = 'left';
-            walkTimeoutRef.current = setTimeout(walkStep, 300);
-          }
-        });
-      } else {
-        Animated.timing(characterX, {
-          toValue: 0,
-          duration: 4000,
-          easing: Easing.linear,
-          useNativeDriver: false,
-        }).start(({ finished }) => {
-          if (finished && isWalkingRef.current) {
-            Animated.timing(flipAnim, {
-              toValue: 1,
-              duration: 300,
-              useNativeDriver: false,
-            }).start();
-            walkDirectionRef.current = 'right';
-            walkTimeoutRef.current = setTimeout(walkStep, 300);
-          }
-        });
+
+    walkIntervalRef.current = setInterval(() => {
+      setWalkCycle(prev => {
+        const next = prev + 1;
+        if (next > 3) return 0;
+        return next;
+      });
+      setBodyBob(prev => prev === 0 ? -4 : 0);
+    }, 200);
+
+    const walkAcross = () => {
+      if (!isWalkingRef.current) {
+        if (walkIntervalRef.current) clearInterval(walkIntervalRef.current);
+        return;
       }
+      
+      const targetX = walkDirectionRef.current === 'right' ? SCREEN_WIDTH - 140 : 0;
+      
+      Animated.timing(characterX, {
+        toValue: targetX,
+        duration: 5000,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }).start(({ finished }) => {
+        if (finished && isWalkingRef.current) {
+          walkDirectionRef.current = walkDirectionRef.current === 'right' ? 'left' : 'right';
+          flipAnim.setValue(walkDirectionRef.current === 'right' ? 1 : -1);
+          walkTimeoutRef.current = setTimeout(walkAcross, 500);
+        }
+      });
     };
-    
-    walkTimeoutRef.current = setTimeout(walkStep, 500);
+
+    walkAcross();
   }, [isExpanded, flipAnim, characterX]);
 
   useEffect(() => {
@@ -183,7 +172,7 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       if (walkTimeoutRef.current) clearTimeout(walkTimeoutRef.current);
-      if (legAnimRef.current) clearInterval(legAnimRef.current);
+      if (walkIntervalRef.current) clearInterval(walkIntervalRef.current);
     };
   }, [isExpanded, stopWalking, startWalking]);
 
@@ -284,20 +273,36 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     return "Ok!";
   };
 
-  const getLegOffset = () => {
+  const getLegOffset = (isLeft: boolean) => {
     if (!isWalking) return 0;
-    if (legPhase === 0) return -8;
-    if (legPhase === 1) return 0;
-    if (legPhase === 2) return 8;
-    return 0;
+    if (isLeft) {
+      if (walkCycle === 0) return -12;
+      if (walkCycle === 1) return 0;
+      if (walkCycle === 2) return 12;
+      return 0;
+    } else {
+      if (walkCycle === 0) return 12;
+      if (walkCycle === 1) return 0;
+      if (walkCycle === 2) return -12;
+      return 0;
+    }
   };
 
-  const getArmSwing = () => {
+  const getArmOffset = (isLeft: boolean) => {
     if (!isWalking) return 0;
-    if (legPhase === 0 || legPhase === 2) return 15;
-    if (legPhase === 1 || legPhase === 3) return -15;
-    return 0;
+    if (isLeft) {
+      if (walkCycle === 0 || walkCycle === 2) return 15;
+      return -15;
+    } else {
+      if (walkCycle === 0 || walkCycle === 2) return -15;
+      return 15;
+    }
   };
+
+  const leftLegOffset = getLegOffset(true);
+  const rightLegOffset = getLegOffset(false);
+  const leftArmOffset = getArmOffset(true);
+  const rightArmOffset = getArmOffset(false);
 
   if (!visible) return null;
 
@@ -334,57 +339,67 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
 
             <Path d="M170 120 Q150 200 160 300" stroke="#2C2C2C" strokeWidth="40" strokeLinecap="round" />
 
+            {/* Left Leg with swing */}
             <G>
               <Path 
-                d={`M180 500 L185 ${600 + getLegOffset()} L183 ${720 + getLegOffset()}`} 
-                stroke="#FDE2D2" strokeWidth="32" strokeLinecap="round" 
-              />
-              <Path 
-                d={`M215 500 L210 ${600 - getLegOffset()} L212 ${720 - getLegOffset()}`} 
+                d={`M180 500 L${185 + leftLegOffset} 600 L${183 + leftLegOffset * 0.8} 720`} 
                 stroke="#FDE2D2" strokeWidth="32" strokeLinecap="round" 
               />
               <Path d="M180 600 L183 720" stroke="#FFFFFF" strokeWidth="30" strokeLinecap="round" />
-              <Path d="M215 600 L212 720" stroke="#FFFFFF" strokeWidth="30" strokeLinecap="round" />
               <Path d="M165 725 L188 730 L185 752 L160 748 Z" fill="#4E342E" />
+            </G>
+
+            {/* Right Leg with swing */}
+            <G>
+              <Path 
+                d={`M215 500 L${210 + rightLegOffset} 600 L${212 + rightLegOffset * 0.8} 720`} 
+                stroke="#FDE2D2" strokeWidth="32" strokeLinecap="round" 
+              />
+              <Path d="M215 600 L212 720" stroke="#FFFFFF" strokeWidth="30" strokeLinecap="round" />
               <Path d="M200 730 L230 725 L235 748 L210 752 Z" fill="#4E342E" />
             </G>
 
             <Path d="M165 390 L235 390 L255 520 L145 520 Z" fill="#283593" />
             <Path d="M185 390 V520 M200 390 V520 M215 390 V520" stroke="#1A237E" strokeWidth="2" />
 
-            <G>
-              <Path d="M160 210 L240 210 L250 395 L150 395 Z" fill="#FFFFFF" />
-              <Path d="M160 210 Q200 280 240 210 L255 230 Q200 310 145 230 Z" fill="#283593" />
-              <Path d="M150 225 Q200 300 250 225" fill="none" stroke="#FFFFFF" strokeWidth="1.5" />
-              <Path d="M200 260 L185 340 L200 320 L215 340 Z" fill="#1E88E5" />
-              <Circle cx="200" cy="270" r="8" fill="#1E88E5" />
-            </G>
+            {/* Torso with body bob */}
+            <G transform={`translate(0, ${bodyBob})`}>
+              <G>
+                <Path d="M160 210 L240 210 L250 395 L150 395 Z" fill="#FFFFFF" />
+                <Path d="M160 210 Q200 280 240 210 L255 230 Q200 310 145 230 Z" fill="#283593" />
+                <Path d="M150 225 Q200 300 250 225" fill="none" stroke="#FFFFFF" strokeWidth="1.5" />
+                <Path d="M200 260 L185 340 L200 320 L215 340 Z" fill="#1E88E5" />
+                <Circle cx="200" cy="270" r="8" fill="#1E88E5" />
+              </G>
 
-            <G>
-              <Path 
-                d={`M160 215 L${175 + getArmSwing()} 350`} 
-                stroke="#FFFFFF" strokeWidth="20" strokeLinecap="round" 
-              />
-              <Path 
-                d={`M240 215 L${225 - getArmSwing()} 350`} 
-                stroke="#FFFFFF" strokeWidth="20" strokeLinecap="round" 
-              />
-              <Rect x="168" y="340" width="18" height="14" fill="#283593" />
-              <Rect x="214" y="340" width="18" height="14" fill="#283593" />
-              <Path d="M185 355 Q200 375 215 355" fill="#FDE2D2" />
-            </G>
+              {/* Arms with swing */}
+              <G>
+                <Path 
+                  d={`M160 215 L${175 + leftArmOffset} 350`} 
+                  stroke="#FFFFFF" strokeWidth="20" strokeLinecap="round" 
+                />
+                <Path 
+                  d={`M240 215 L${225 + rightArmOffset} 350`} 
+                  stroke="#FFFFFF" strokeWidth="20" strokeLinecap="round" 
+                />
+                <Rect x="168" y="340" width="18" height="14" fill="#283593" />
+                <Rect x="214" y="340" width="18" height="14" fill="#283593" />
+                <Path d="M185 355 Q200 375 215 355" fill="#FDE2D2" />
+              </G>
 
-            <G>
-              <Rect x="190" y="180" width="20" height="30" fill="#FDE2D2" />
-              <Path d="M165 110 Q165 195 200 200 Q235 195 235 110 Z" fill="#FDE2D2" />
-              <Circle cx="180" cy="165" r="7" fill="#FFCDD2" opacity={isBlushing ? 0.9 : 0.6} />
-              <Circle cx="220" cy="165" r="7" fill="#FFCDD2" opacity={isBlushing ? 0.9 : 0.6} />
-              <Path d="M180 155 Q188 160 195 155" fill="none" stroke="#4E342E" strokeWidth="2" />
-              <Path d="M205 155 Q212 160 220 155" fill="none" stroke="#4E342E" strokeWidth="2" />
-              <Path d="M230 100 Q280 150 250 350" fill="none" stroke="#2C2C2C" strokeWidth="24" strokeLinecap="round" />
-              <Circle cx="235" cy="100" r="9" fill="#FFFFFF" stroke="#E0E0E0" strokeWidth="1" />
-              <Path d="M165 110 Q200 80 235 110 L240 140 Q220 120 200 135 Q180 120 160 140 Z" fill="#2C2C2C" />
-              <Path d="M165 120 L160 220 M235 120 L240 220" stroke="#2C2C2C" strokeWidth="11" strokeLinecap="round" />
+              {/* Head */}
+              <G>
+                <Rect x="190" y="180" width="20" height="30" fill="#FDE2D2" />
+                <Path d="M165 110 Q165 195 200 200 Q235 195 235 110 Z" fill="#FDE2D2" />
+                <Circle cx="180" cy="165" r="7" fill="#FFCDD2" opacity={isBlushing ? 0.9 : 0.6} />
+                <Circle cx="220" cy="165" r="7" fill="#FFCDD2" opacity={isBlushing ? 0.9 : 0.6} />
+                <Path d="M180 155 Q188 160 195 155" fill="none" stroke="#4E342E" strokeWidth="2" />
+                <Path d="M205 155 Q212 160 220 155" fill="none" stroke="#4E342E" strokeWidth="2" />
+                <Path d="M230 100 Q280 150 250 350" fill="none" stroke="#2C2C2C" strokeWidth="24" strokeLinecap="round" />
+                <Circle cx="235" cy="100" r="9" fill="#FFFFFF" stroke="#E0E0E0" strokeWidth="1" />
+                <Path d="M165 110 Q200 80 235 110 L240 140 Q220 120 200 135 Q180 120 160 140 Z" fill="#2C2C2C" />
+                <Path d="M165 120 L160 220 M235 120 L240 220" stroke="#2C2C2C" strokeWidth="11" strokeLinecap="round" />
+              </G>
             </G>
           </Svg>
 
