@@ -1,7 +1,7 @@
 // Powered by Sakura Focus - Anime Companion with Human-like Behavior
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Easing, TextInput, ScrollView, Dimensions } from 'react-native';
-import Svg, { Path, Ellipse, Circle, Rect, G } from 'react-native-svg';
+import Svg, { Path, Ellipse, Circle, Rect, G, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { ChatMessage, CompanionState, getSimpleResponse } from '@/types/companion';
 import { TimerPhase } from '@/types';
@@ -94,8 +94,12 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
         if (next > 3) return 0;
         return next;
       });
-      setBodyBob(prev => prev === 0 ? -4 : 0);
-    }, 200);
+      setBodyBob(prev => {
+        if (prev === 0) return -6;
+        if (prev === -6) return 0;
+        return prev;
+      });
+    }, 250);
 
     const walkAcross = () => {
       if (!isWalkingRef.current) {
@@ -107,7 +111,7 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
       
       Animated.timing(characterX, {
         toValue: targetX,
-        duration: 5000,
+        duration: 6000,
         easing: Easing.linear,
         useNativeDriver: false,
       }).start(({ finished }) => {
@@ -273,36 +277,47 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
     return "Ok!";
   };
 
-  const getLegOffset = (isLeft: boolean) => {
+  const getLegRotation = (isLeft: boolean) => {
     if (!isWalking) return 0;
     if (isLeft) {
-      if (walkCycle === 0) return -12;
-      if (walkCycle === 1) return 0;
-      if (walkCycle === 2) return 12;
-      return 0;
+      if (walkCycle === 0) return -20;
+      if (walkCycle === 1) return -5;
+      if (walkCycle === 2) return 20;
+      return 5;
     } else {
-      if (walkCycle === 0) return 12;
-      if (walkCycle === 1) return 0;
-      if (walkCycle === 2) return -12;
-      return 0;
+      if (walkCycle === 0) return 20;
+      if (walkCycle === 1) return 5;
+      if (walkCycle === 2) return -20;
+      return -5;
     }
   };
 
-  const getArmOffset = (isLeft: boolean) => {
+  const getArmRotation = (isLeft: boolean) => {
     if (!isWalking) return 0;
     if (isLeft) {
-      if (walkCycle === 0 || walkCycle === 2) return 15;
-      return -15;
+      if (walkCycle === 0 || walkCycle === 2) return 20;
+      return -20;
     } else {
-      if (walkCycle === 0 || walkCycle === 2) return -15;
-      return 15;
+      if (walkCycle === 0 || walkCycle === 2) return -20;
+      return 20;
     }
   };
 
-  const leftLegOffset = getLegOffset(true);
-  const rightLegOffset = getLegOffset(false);
-  const leftArmOffset = getArmOffset(true);
-  const rightArmOffset = getArmOffset(false);
+  const leftLegRot = getLegRotation(true);
+  const rightLegRot = getLegRotation(false);
+  const leftArmRot = getArmRotation(true);
+  const rightArmRot = getArmRotation(false);
+
+  const degToRad = (deg: number) => (deg * Math.PI) / 180;
+  const leftLegX = 200 + 30 * Math.sin(degToRad(leftLegRot));
+  const leftLegY = 520 + 30 * (1 - Math.cos(degToRad(leftLegRot)));
+  const rightLegX = 200 - 30 * Math.sin(degToRad(rightLegRot));
+  const rightLegY = 520 + 30 * (1 - Math.cos(degToRad(rightLegRot)));
+
+  const leftArmX = 160 + 25 * Math.sin(degToRad(leftArmRot));
+  const leftArmY = 240 + 25 * (1 - Math.cos(degToRad(leftArmRot)));
+  const rightArmX = 240 - 25 * Math.sin(degToRad(rightArmRot));
+  const rightArmY = 240 + 25 * (1 - Math.cos(degToRad(rightArmRot)));
 
   if (!visible) return null;
 
@@ -334,36 +349,50 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
             </View>
           )}
           
-          <Svg width={120} height={240} viewBox="0 0 400 800">
-            <Ellipse cx="200" cy="760" rx="70" ry="15" fill="#E0E0E0" opacity={isWalking ? 0.6 : 1} />
+          <Svg width={120} height={260} viewBox="0 0 400 850">
+            <Defs>
+              <LinearGradient id="legGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <Stop offset="0%" stopColor="#FDE2D2" />
+                <Stop offset="100%" stopColor="#E8C4B8" />
+              </LinearGradient>
+              <LinearGradient id="armGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <Stop offset="0%" stopColor="#FFFFFF" />
+                <Stop offset="100%" stopColor="#E8E8E8" />
+              </LinearGradient>
+            </Defs>
 
-            <Path d="M170 120 Q150 200 160 300" stroke="#2C2C2C" strokeWidth="40" strokeLinecap="round" />
+            {/* Shadow */}
+            <Ellipse cx="200" cy="800" rx="70" ry="12" fill="#000000" opacity={isWalking ? 0.15 : 0.1} />
 
-            {/* Left Leg with swing */}
-            <G>
+            {/* Back Hair (behind body) */}
+            <Path d="M170 120 Q150 200 160 320" stroke="#2C2C2C" strokeWidth="45" strokeLinecap="round" />
+
+            {/* LEFT LEG (Back) - darker for depth */}
+            <G opacity={0.7}>
               <Path 
-                d={`M180 500 L${185 + leftLegOffset} 600 L${183 + leftLegOffset * 0.8} 720`} 
-                stroke="#FDE2D2" strokeWidth="32" strokeLinecap="round" 
+                d={`M185 520 Q${185 + leftLegRot * 1.5} ${550 + Math.abs(leftLegRot)} ${180 + leftLegRot * 0.8} 720`} 
+                stroke="#D4A89A" strokeWidth="32" strokeLinecap="round" 
               />
-              <Path d="M180 600 L183 720" stroke="#FFFFFF" strokeWidth="30" strokeLinecap="round" />
-              <Path d="M165 725 L188 730 L185 752 L160 748 Z" fill="#4E342E" />
+              <Path d="M180 600 L183 720" stroke="#C9B8B0" strokeWidth="30" strokeLinecap="round" />
+              <Path d="M165 725 L188 730 L185 752 L160 748 Z" fill="#3D2A24" />
             </G>
 
-            {/* Right Leg with swing */}
-            <G>
+            {/* LEFT ARM (Back) - darker for depth */}
+            <G opacity={0.7}>
               <Path 
-                d={`M215 500 L${210 + rightLegOffset} 600 L${212 + rightLegOffset * 0.8} 720`} 
-                stroke="#FDE2D2" strokeWidth="32" strokeLinecap="round" 
+                d={`M160 240 Q${leftArmX - 20} ${(leftArmY + 350) / 2} ${leftArmX + (leftArmRot > 0 ? 15 : -15)} 360`} 
+                stroke="#D0D0D0" strokeWidth="22" strokeLinecap="round" 
               />
-              <Path d="M215 600 L212 720" stroke="#FFFFFF" strokeWidth="30" strokeLinecap="round" />
-              <Path d="M200 730 L230 725 L235 748 L210 752 Z" fill="#4E342E" />
+              <Rect x={170} y="350" width="16" height="12" rx="4" fill="#D0D0D0" />
             </G>
 
-            <Path d="M165 390 L235 390 L255 520 L145 520 Z" fill="#283593" />
-            <Path d="M185 390 V520 M200 390 V520 M215 390 V520" stroke="#1A237E" strokeWidth="2" />
-
-            {/* Torso with body bob */}
+            {/* Torso Group with Body Bob */}
             <G transform={`translate(0, ${bodyBob})`}>
+              {/* Skirt */}
+              <Path d="M165 390 L235 390 L260 520 L140 520 Z" fill="#283593" />
+              <Path d="M185 390 V520 M200 390 V520 M215 390 V520" stroke="#1A237E" strokeWidth="2" />
+
+              {/* Top/Shirt */}
               <G>
                 <Path d="M160 210 L240 210 L250 395 L150 395 Z" fill="#FFFFFF" />
                 <Path d="M160 210 Q200 280 240 210 L255 230 Q200 310 145 230 Z" fill="#283593" />
@@ -371,36 +400,48 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
                 <Path d="M200 260 L185 340 L200 320 L215 340 Z" fill="#1E88E5" />
                 <Circle cx="200" cy="270" r="8" fill="#1E88E5" />
               </G>
-
-              {/* Arms with swing */}
-              <G>
-                <Path 
-                  d={`M160 215 L${175 + leftArmOffset} 350`} 
-                  stroke="#FFFFFF" strokeWidth="20" strokeLinecap="round" 
-                />
-                <Path 
-                  d={`M240 215 L${225 + rightArmOffset} 350`} 
-                  stroke="#FFFFFF" strokeWidth="20" strokeLinecap="round" 
-                />
-                <Rect x="168" y="340" width="18" height="14" fill="#283593" />
-                <Rect x="214" y="340" width="18" height="14" fill="#283593" />
-                <Path d="M185 355 Q200 375 215 355" fill="#FDE2D2" />
-              </G>
-
-              {/* Head */}
-              <G>
-                <Rect x="190" y="180" width="20" height="30" fill="#FDE2D2" />
-                <Path d="M165 110 Q165 195 200 200 Q235 195 235 110 Z" fill="#FDE2D2" />
-                <Circle cx="180" cy="165" r="7" fill="#FFCDD2" opacity={isBlushing ? 0.9 : 0.6} />
-                <Circle cx="220" cy="165" r="7" fill="#FFCDD2" opacity={isBlushing ? 0.9 : 0.6} />
-                <Path d="M180 155 Q188 160 195 155" fill="none" stroke="#4E342E" strokeWidth="2" />
-                <Path d="M205 155 Q212 160 220 155" fill="none" stroke="#4E342E" strokeWidth="2" />
-                <Path d="M230 100 Q280 150 250 350" fill="none" stroke="#2C2C2C" strokeWidth="24" strokeLinecap="round" />
-                <Circle cx="235" cy="100" r="9" fill="#FFFFFF" stroke="#E0E0E0" strokeWidth="1" />
-                <Path d="M165 110 Q200 80 235 110 L240 140 Q220 120 200 135 Q180 120 160 140 Z" fill="#2C2C2C" />
-                <Path d="M165 120 L160 220 M235 120 L240 220" stroke="#2C2C2C" strokeWidth="11" strokeLinecap="round" />
-              </G>
             </G>
+
+            {/* RIGHT LEG (Front) */}
+            <G transform={`translate(0, ${bodyBob})`}>
+              <Path 
+                d={`M215 520 Q${215 + rightLegRot * 1.5} ${550 + Math.abs(rightLegRot)} ${220 + rightLegRot * 0.8} 720`} 
+                stroke="url(#legGradient)" strokeWidth="32" strokeLinecap="round" 
+              />
+              <Path d="M215 600 L212 720" stroke="#FFFFFF" strokeWidth="30" strokeLinecap="round" />
+              <Path d="M200 730 L230 725 L235 748 L210 752 Z" fill="#4E342E" />
+            </G>
+
+            {/* RIGHT ARM (Front) */}
+            <G transform={`translate(0, ${bodyBob})`}>
+              <Path 
+                d={`M240 240 Q${rightArmX + 20} ${(rightArmY + 350) / 2} ${rightArmX + (rightArmRot > 0 ? -15 : 15)} 360`} 
+                stroke="url(#armGradient)" strokeWidth="22" strokeLinecap="round" 
+              />
+              <Rect x="214" y="350" width="16" height="12" rx="4" fill="#F5F5F5" />
+            </G>
+
+            {/* Head Group (on top) */}
+            <G transform={`translate(0, ${bodyBob})`}>
+              {/* Face/Head */}
+              <Rect x="190" y="180" width="20" height="30" fill="#FDE2D2" />
+              <Path d="M165 110 Q165 195 200 200 Q235 195 235 110 Z" fill="#FDE2D2" />
+              
+              {/* Blush */}
+              <Circle cx="180" cy="165" r="7" fill="#FFCDD2" opacity={isBlushing ? 0.9 : 0.5} />
+              <Circle cx="220" cy="165" r="7" fill="#FFCDD2" opacity={isBlushing ? 0.9 : 0.5} />
+              
+              {/* Eyes */}
+              <Path d="M180 155 Q188 160 195 155" fill="none" stroke="#4E342E" strokeWidth="2" />
+              <Path d="M205 155 Q212 160 220 155" fill="none" stroke="#4E342E" strokeWidth="2" />
+              
+              {/* Hair Front */}
+              <Path d="M230 100 Q280 150 250 350" fill="none" stroke="#2C2C2C" strokeWidth="24" strokeLinecap="round" />
+              <Circle cx="235" cy="100" r="9" fill="#FFFFFF" stroke="#E0E0E0" strokeWidth="1" />
+              <Path d="M165 110 Q200 80 235 110 L240 140 Q220 120 200 135 Q180 120 160 140 Z" fill="#2C2C2C" />
+              <Path d="M165 120 L160 220 M235 120 L240 220" stroke="#2C2C2C" strokeWidth="11" strokeLinecap="round" />
+            </G>
+
           </Svg>
 
           {isWalking && (
@@ -482,7 +523,7 @@ export function AnimeCompanion({ state, visible = true, isRunning = false, phase
 const styles = StyleSheet.create({
   characterWrapper: {
     position: 'absolute',
-    bottom: 120,
+    bottom: 110,
     right: 10,
     zIndex: 1000,
   },
