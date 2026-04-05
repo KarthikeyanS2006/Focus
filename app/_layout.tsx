@@ -9,18 +9,34 @@ import { View, ActivityIndicator, StyleSheet, BackHandler } from 'react-native';
 import { getUserProfile } from '@/services/storageService';
 import { Colors } from '@/constants/theme';
 
-export default function RootLayout() {
-  const [isLoading, setIsLoading] = useState(true);
+function InitialRoute() {
+  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
     const checkUser = async () => {
-      await getUserProfile();
-      setIsLoading(false);
+      const profile = await getUserProfile();
+      if (profile.isNewUser) {
+        router.replace('/welcome');
+      } else {
+        router.replace('/(tabs)');
+      }
+      setChecked(true);
     };
     checkUser();
   }, []);
 
-  // Handle Android back button
+  if (!checked) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={Colors.sakura} />
+      </View>
+    );
+  }
+
+  return null;
+}
+
+export default function RootLayout() {
   useEffect(() => {
     const backAction = () => {
       if (router.canGoBack()) {
@@ -34,20 +50,13 @@ export default function RootLayout() {
     return () => backHandler.remove();
   }, []);
 
-  if (isLoading) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color={Colors.sakura} />
-      </View>
-    );
-  }
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <TimerProvider>
           <StatusBar style="light" />
           <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen 
               name="settings" 
@@ -57,6 +66,7 @@ export default function RootLayout() {
               }} 
             />
           </Stack>
+          <InitialRoute />
         </TimerProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

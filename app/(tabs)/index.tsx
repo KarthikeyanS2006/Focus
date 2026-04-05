@@ -72,6 +72,7 @@ export default function TimerScreen() {
     if (phase === 'idle') {
       setCurrentTipIndex(Math.floor(Math.random() * FOCUS_TIPS.length));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   useEffect(() => {

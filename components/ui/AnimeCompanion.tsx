@@ -51,7 +51,7 @@ export function AnimeCompanion({ state, visible = true }: Props) {
     Animated.spring(characterX, {
       toValue: 0,
       friction: 8,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
     flipAnim.setValue(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,13 +74,13 @@ export function AnimeCompanion({ state, visible = true }: Props) {
           toValue: SCREEN_WIDTH - 140,
           duration: 4000,
           easing: Easing.linear,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }).start(({ finished }) => {
           if (finished && isWalking) {
             Animated.timing(flipAnim, {
               toValue: -1,
               duration: 300,
-              useNativeDriver: true,
+              useNativeDriver: false,
             }).start();
             walkDirectionRef.current = 'left';
             walkTimeoutRef.current = setTimeout(walkStep, 300);
@@ -91,13 +91,13 @@ export function AnimeCompanion({ state, visible = true }: Props) {
           toValue: 0,
           duration: 4000,
           easing: Easing.linear,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }).start(({ finished }) => {
           if (finished && isWalking) {
             Animated.timing(flipAnim, {
               toValue: 1,
               duration: 300,
-              useNativeDriver: true,
+              useNativeDriver: false,
             }).start();
             walkDirectionRef.current = 'right';
             walkTimeoutRef.current = setTimeout(walkStep, 300);
@@ -134,13 +134,13 @@ export function AnimeCompanion({ state, visible = true }: Props) {
         toValue: -50,
         duration: 200,
         easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(jumpAnim, {
         toValue: 0,
         duration: 300,
         easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
     
@@ -157,13 +157,13 @@ export function AnimeCompanion({ state, visible = true }: Props) {
             toValue: -5,
             duration: 1500,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(bounceAnim, {
             toValue: 0,
             duration: 1500,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
         ])
       );
