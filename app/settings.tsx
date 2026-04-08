@@ -9,7 +9,7 @@ import * as Notifications from 'expo-notifications';
 import * as Speech from 'expo-speech';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { BlockedApp, DISTRACTION_CATEGORIES, DistractionCategory } from '@/types';
-import { getBlockedApps, addBlockedApp, removeBlockedApp, getUserProfile, saveUserProfile } from '@/services/storageService';
+import { getBlockedApps, addBlockedApp, removeBlockedApp, getUserProfile, saveUserProfile, getAppSettings, saveAppSettings, AppSettings } from '@/services/storageService';
 import { SakuraAnimation } from '@/components/ui/SakuraAnimation';
 import { AmbientType, playAmbientSound } from '@/services/audioService';
 
@@ -33,6 +33,11 @@ export default function SettingsScreen() {
     const profile = await getUserProfile();
     setUserName(profile.name);
     setDailyGoal(String(profile.dailyGoalMinutes));
+    const settings = await getAppSettings();
+    setNotificationsEnabled(settings.notificationsEnabled);
+    setSoundEnabled(settings.soundEnabled);
+    setVoiceEnabled(settings.voiceEnabled);
+    setAmbientType(settings.ambientType as AmbientType);
   }, []);
 
   useEffect(() => {
@@ -59,6 +64,64 @@ export default function SettingsScreen() {
       pitch: 1.0,
       rate: 0.9,
     });
+  };
+
+  const handleSaveSettings = async () => {
+    await saveAppSettings({
+      notificationsEnabled,
+      soundEnabled,
+      voiceEnabled,
+      ambientType,
+    });
+  };
+
+  const handleNotificationsChange = async (value: boolean) => {
+    setNotificationsEnabled(value);
+    await saveAppSettings({
+      notificationsEnabled: value,
+      soundEnabled,
+      voiceEnabled,
+      ambientType,
+    });
+  };
+
+  const handleSoundChange = async (value: boolean) => {
+    setSoundEnabled(value);
+    await saveAppSettings({
+      notificationsEnabled,
+      soundEnabled: value,
+      voiceEnabled,
+      ambientType,
+    });
+  };
+
+  const handleVoiceChange = async (value: boolean) => {
+    setVoiceEnabled(value);
+    await saveAppSettings({
+      notificationsEnabled,
+      soundEnabled,
+      voiceEnabled: value,
+      ambientType,
+    });
+    if (value && !hasNotificationPermission) {
+      requestNotificationPermission();
+    }
+    if (value) {
+      handleTestSpeech();
+    }
+  };
+
+  const handleAmbientChange = async (type: AmbientType) => {
+    setAmbientType(type);
+    await saveAppSettings({
+      notificationsEnabled,
+      soundEnabled,
+      voiceEnabled,
+      ambientType: type,
+    });
+    if (type !== 'none') {
+      playAmbientSound(type);
+    }
   };
 
   const handleShare = async () => {
@@ -256,7 +319,7 @@ export default function SettingsScreen() {
               </View>
               <Switch
                 value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
+                onValueChange={handleNotificationsChange}
                 trackColor={{ false: Colors.border, true: Colors.primary }}
                 thumbColor={Colors.white}
               />
@@ -272,7 +335,7 @@ export default function SettingsScreen() {
               </View>
               <Switch
                 value={soundEnabled}
-                onValueChange={setSoundEnabled}
+                onValueChange={handleSoundChange}
                 trackColor={{ false: Colors.border, true: Colors.primary }}
                 thumbColor={Colors.white}
               />
@@ -288,15 +351,7 @@ export default function SettingsScreen() {
               </View>
               <Switch
                 value={voiceEnabled}
-                onValueChange={(val) => {
-                  setVoiceEnabled(val);
-                  if (val && !hasNotificationPermission) {
-                    requestNotificationPermission();
-                  }
-                  if (val) {
-                    handleTestSpeech();
-                  }
-                }}
+                onValueChange={handleVoiceChange}
                 trackColor={{ false: Colors.border, true: Colors.primary }}
                 thumbColor={Colors.white}
               />
@@ -318,12 +373,7 @@ export default function SettingsScreen() {
                     styles.ambientBtn,
                     ambientType === type && styles.ambientBtnActive,
                   ]}
-                  onPress={() => {
-                    setAmbientType(type);
-                    if (type !== 'none') {
-                      playAmbientSound(type);
-                    }
-                  }}
+                  onPress={() => handleAmbientChange(type)}
                 >
                   <MaterialIcons
                     name={

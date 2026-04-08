@@ -10,7 +10,49 @@ const KEYS = {
   blockedApps: 'focus_blocked_apps',
   userProfile: 'focus_user_profile',
   goalTargets: 'focus_goal_targets',
+  appSettings: 'focus_app_settings',
 };
+
+export interface AppSettings {
+  notificationsEnabled: boolean;
+  soundEnabled: boolean;
+  voiceEnabled: boolean;
+  ambientType: string;
+  widgetConfig?: any;
+}
+
+export async function getAppSettings(): Promise<AppSettings> {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.appSettings);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+    return {
+      notificationsEnabled: true,
+      soundEnabled: true,
+      voiceEnabled: false,
+      ambientType: 'none',
+    };
+  } catch {
+    return {
+      notificationsEnabled: true,
+      soundEnabled: true,
+      voiceEnabled: false,
+      ambientType: 'none',
+    };
+  }
+}
+
+export async function saveAppSettings(settings: AppSettings): Promise<void> {
+  await AsyncStorage.setItem(KEYS.appSettings, JSON.stringify(settings));
+}
+
+export async function updateAppSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<AppSettings> {
+  const settings = await getAppSettings();
+  settings[key] = value;
+  await saveAppSettings(settings);
+  return settings;
+}
 
 export async function getSessions(): Promise<Session[]> {
   try {
