@@ -1,6 +1,6 @@
-// Goal Target Modal - Add/Edit goal targets
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, TextInput, Platform, Alert } from 'react-native';
+// Goal Target Modal - Add/Edit goal targets with scrollable date picker
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, Modal, Pressable, TextInput, ScrollView, Dimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
@@ -13,39 +13,207 @@ interface GoalTargetModalProps {
   onSave?: (goal: GoalTarget) => void;
 }
 
+// Generate date options
+const generateYears = () => {
+  const years = [];
+  const currentYear = new Date().getFullYear();
+  for (let i = currentYear; i <= currentYear + 5; i++) {
+    years.push(i);
+  }
+  return years;
+};
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const generateDays = (year: number, month: number) => {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const days = [];
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push(i);
+  }
+  return days;
+};
+
+interface DatePickerProps {
+  value: Date;
+  onChange: (date: Date) => void;
+  minDate?: Date;
+  label: string;
+  icon: 'play-arrow' | 'flag';
+  iconColor: string;
+}
+
+function DatePicker({ value, onChange, label, icon, iconColor }: DatePickerProps) {
+  const [selectedDay, setSelectedDay] = useState(value.getDate());
+  const [selectedMonth, setSelectedMonth] = useState(value.getMonth());
+  const [selectedYear, setSelectedYear] = useState(value.getFullYear());
+  const [isOpen, setIsOpen] = useState(false);
+
+  const years = useMemo(() => generateYears(), []);
+  const days = useMemo(() => generateDays(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
+
+  const handleConfirm = () => {
+    const newDate = new Date(selectedYear, selectedMonth, selectedDay);
+    onChange(newDate);
+    setIsOpen(false);
+  };
+
+  const formatDisplayDate = (date: Date) => {
+    return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+  };
+
+  return (
+    <View>
+      <Text style={styles.label}>{label}</Text>
+      <Pressable style={styles.dateSelector} onPress={() => setIsOpen(!isOpen)}>
+        <MaterialIcons name={icon} size={24} color={iconColor} />
+        <Text style={styles.dateSelectorText}>{formatDisplayDate(value)}</Text>
+        <MaterialIcons name={isOpen ? 'expand-less' : 'expand-more'} size={24} color={Colors.textSecondary} />
+      </Pressable>
+
+      {isOpen && (
+        <View style={styles.pickerContainer}>
+          <View style={styles.pickerWheel}>
+            <View style={styles.pickerColumn}>
+              <Text style={styles.pickerColumnTitle}>Day</Text>
+              <ScrollView 
+                style={styles.pickerScroll}
+                showsVerticalScrollIndicator={false}
+                snapToInterval={40}
+                decelerationRate="fast"
+              >
+                {[...Array(31)].map((_, i) => (
+                  <Pressable
+                    key={i}
+                    style={[
+                      styles.pickerItem,
+                      selectedDay === i + 1 && styles.pickerItemSelected
+                    ]}
+                    onPress={() => {
+                      const newDate = new Date(selectedYear, selectedMonth, i + 1);
+                      setSelectedDay(i + 1);
+                      setSelectedMonth(newDate.getMonth());
+                    }}
+                  >
+                    <Text style={[
+                      styles.pickerItemText,
+                      selectedDay === i + 1 && styles.pickerItemTextSelected
+                    ]}>{i + 1}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.pickerColumn}>
+              <Text style={styles.pickerColumnTitle}>Month</Text>
+              <ScrollView 
+                style={styles.pickerScroll}
+                showsVerticalScrollIndicator={false}
+                snapToInterval={40}
+                decelerationRate="fast"
+              >
+                {MONTHS.map((month, i) => (
+                  <Pressable
+                    key={month}
+                    style={[
+                      styles.pickerItem,
+                      selectedMonth === i && styles.pickerItemSelected
+                    ]}
+                    onPress={() => {
+                      const daysInNewMonth = new Date(selectedYear, i + 1, 0).getDate();
+                      const newDay = Math.min(selectedDay, daysInNewMonth);
+                      setSelectedMonth(i);
+                      setSelectedDay(newDay);
+                    }}
+                  >
+                    <Text style={[
+                      styles.pickerItemText,
+                      selectedMonth === i && styles.pickerItemTextSelected
+                    ]}>{month}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.pickerColumn}>
+              <Text style={styles.pickerColumnTitle}>Year</Text>
+              <ScrollView 
+                style={styles.pickerScroll}
+                showsVerticalScrollIndicator={false}
+                snapToInterval={40}
+                decelerationRate="fast"
+              >
+                {years.map((year) => (
+                  <Pressable
+                    key={year}
+                    style={[
+                      styles.pickerItem,
+                      selectedYear === year && styles.pickerItemSelected
+                    ]}
+                    onPress={() => setSelectedYear(year)}
+                  >
+                    <Text style={[
+                      styles.pickerItemText,
+                      selectedYear === year && styles.pickerItemTextSelected
+                    ]}>{year}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+
+          <Pressable style={styles.confirmBtn} onPress={handleConfirm}>
+            <LinearGradient
+              colors={[Colors.primary, Colors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.confirmBtnGradient}
+            />
+            <View style={styles.confirmBtnContent}>
+              <MaterialIcons name="check" size={20} color={Colors.white} />
+              <Text style={styles.confirmBtnText}>Confirm</Text>
+            </View>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
 export function GoalTargetModal({ visible, onClose, onSave }: GoalTargetModalProps) {
   const [title, setTitle] = useState('');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [targetDate, setTargetDate] = useState('');
+  const [startDate, setStartDate] = useState(new Date());
+  const [targetDate, setTargetDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 30); // Default to 30 days from now
+    return date;
+  });
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSave = async () => {
     if (!title.trim()) {
-      Alert.alert('Error', 'Please enter a goal title');
       return;
     }
-    if (!targetDate) {
-      Alert.alert('Error', 'Please select a target date');
-      return;
-    }
-    if (new Date(targetDate) <= new Date(startDate)) {
-      Alert.alert('Error', 'Target date must be after start date');
+    if (targetDate <= startDate) {
       return;
     }
 
     setIsLoading(true);
     try {
-      await addGoalTarget({
+      const goal = await addGoalTarget({
         title: title.trim(),
-        startDate,
-        targetDate,
+        startDate: startDate.toISOString().split('T')[0],
+        targetDate: targetDate.toISOString().split('T')[0],
       });
       setTitle('');
-      setStartDate(new Date().toISOString().split('T')[0]);
-      setTargetDate('');
+      setStartDate(new Date());
+      const newTarget = new Date();
+      newTarget.setDate(newTarget.getDate() + 30);
+      setTargetDate(newTarget);
+      onSave?.(goal[0]);
       onClose();
     } catch (error) {
-      Alert.alert('Error', 'Failed to save goal');
+      console.error('Failed to save goal:', error);
     } finally {
       setIsLoading(false);
     }
@@ -53,21 +221,14 @@ export function GoalTargetModal({ visible, onClose, onSave }: GoalTargetModalPro
 
   const handleClose = () => {
     setTitle('');
-    setStartDate(new Date().toISOString().split('T')[0]);
-    setTargetDate('');
+    setStartDate(new Date());
+    const newTarget = new Date();
+    newTarget.setDate(newTarget.getDate() + 30);
+    setTargetDate(newTarget);
     onClose();
   };
 
-  const getMinDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  };
-
-  const getMaxDate = () => {
-    const twoYears = new Date();
-    twoYears.setFullYear(twoYears.getFullYear() + 2);
-    return twoYears.toISOString().split('T')[0];
-  };
+  const daysRemaining = Math.ceil((targetDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
   return (
     <Modal
@@ -79,7 +240,7 @@ export function GoalTargetModal({ visible, onClose, onSave }: GoalTargetModalPro
       <Pressable style={styles.overlay} onPress={handleClose}>
         <Pressable style={styles.modal} onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
-            <Text style={styles.title}>Set Your Goal</Text>
+            <Text style={styles.headerTitle}>Set Your Goal</Text>
             <Pressable onPress={handleClose} style={styles.closeBtn}>
               <MaterialIcons name="close" size={24} color={Colors.textSecondary} />
             </Pressable>
@@ -89,51 +250,49 @@ export function GoalTargetModal({ visible, onClose, onSave }: GoalTargetModalPro
             <Text style={styles.label}>What is your goal?</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g., Exam preparation, Learn coding"
+              placeholder="e.g., Exam preparation"
               placeholderTextColor={Colors.textMuted}
               value={title}
               onChangeText={setTitle}
               maxLength={50}
             />
 
-            <Text style={styles.label}>When did you start?</Text>
-            <View style={styles.dateRow}>
-              <MaterialIcons name="play-arrow" size={20} color={Colors.success} />
-              <TextInput
-                style={[styles.dateInput, { color: Colors.textPrimary }]}
-                value={startDate}
-                onChangeText={setStartDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={Colors.textMuted}
-              />
-            </View>
+            <DatePicker
+              value={startDate}
+              onChange={setStartDate}
+              label="When did you start?"
+              icon="play-arrow"
+              iconColor={Colors.success}
+            />
 
-            <Text style={styles.label}>When is your target date?</Text>
-            <View style={styles.dateRow}>
-              <MaterialIcons name="flag" size={20} color={Colors.primary} />
-              <TextInput
-                style={[styles.dateInput, { color: Colors.textPrimary }]}
-                value={targetDate}
-                onChangeText={setTargetDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={Colors.textMuted}
-              />
-            </View>
+            <DatePicker
+              value={targetDate}
+              onChange={setTargetDate}
+              label="When is your target date?"
+              icon="flag"
+              iconColor={Colors.primary}
+            />
 
-            <Text style={styles.hint}>
-              We'll track how many days until your target and show your progress
-            </Text>
+            {daysRemaining > 0 && (
+              <View style={styles.previewCard}>
+                <MaterialIcons name="event-available" size={24} color={Colors.gold} />
+                <View style={styles.previewContent}>
+                  <Text style={styles.previewNumber}>{daysRemaining}</Text>
+                  <Text style={styles.previewLabel}>days to achieve your goal</Text>
+                </View>
+              </View>
+            )}
           </View>
 
           <Pressable 
-            style={[styles.saveBtn, isLoading && styles.saveBtnDisabled]} 
+            style={[styles.saveBtn, (!title.trim() || isLoading) && styles.saveBtnDisabled]} 
             onPress={handleSave}
-            disabled={isLoading}
+            disabled={!title.trim() || isLoading}
           >
             <LinearGradient
               colors={[Colors.primary, Colors.secondary]}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              end={{ x: 1, y: 0 }}
               style={styles.saveBtnGradient}
             />
             <View style={styles.saveBtnContent}>
@@ -165,6 +324,7 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     borderWidth: 1,
     borderColor: Colors.border,
+    maxHeight: '90%',
   },
   header: {
     flexDirection: 'row',
@@ -172,7 +332,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.lg,
   },
-  title: {
+  headerTitle: {
     fontSize: FontSize.xl,
     fontWeight: FontWeight.bold,
     color: Colors.textPrimary,
@@ -202,7 +362,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  dateRow: {
+  dateSelector: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
@@ -212,22 +372,112 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  dateInput: {
+  dateSelectorText: {
     flex: 1,
     fontSize: FontSize.md,
+    color: Colors.textPrimary,
+    fontWeight: FontWeight.medium,
   },
-  hint: {
+  pickerContainer: {
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.primary + '40',
+  },
+  pickerWheel: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    height: 160,
+  },
+  pickerColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  pickerColumnTitle: {
     fontSize: FontSize.xs,
     color: Colors.textMuted,
+    fontWeight: FontWeight.semibold,
+    marginBottom: Spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  pickerScroll: {
+    flex: 1,
+    width: '100%',
+  },
+  pickerItem: {
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.sm,
+  },
+  pickerItemSelected: {
+    backgroundColor: Colors.primary,
+  },
+  pickerItemText: {
+    fontSize: FontSize.md,
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.medium,
+  },
+  pickerItemTextSelected: {
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
+  },
+  confirmBtn: {
+    borderRadius: Radius.md,
+    overflow: 'hidden',
     marginTop: Spacing.md,
-    fontStyle: 'italic',
+  },
+  confirmBtnGradient: {
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmBtnContent: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  confirmBtnText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
+  },
+  previewCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    backgroundColor: Colors.goldMuted,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.gold + '40',
+  },
+  previewContent: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Spacing.xs,
+  },
+  previewNumber: {
+    fontSize: FontSize.xxl,
+    fontWeight: FontWeight.bold,
+    color: Colors.gold,
+  },
+  previewLabel: {
+    fontSize: FontSize.sm,
+    color: Colors.gold,
+    fontWeight: FontWeight.medium,
   },
   saveBtn: {
     borderRadius: Radius.md,
     overflow: 'hidden',
   },
   saveBtnDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   saveBtnGradient: {
     paddingVertical: Spacing.md,
