@@ -52,6 +52,18 @@ export interface UserProfile {
   dailyGoalMinutes: number;
 }
 
+export interface GoalTarget {
+  id: string;
+  title: string;
+  targetDate: string;
+  startDate: string;
+  createdAt: string;
+  completed: boolean;
+  totalDays: number;
+  daysElapsed: number;
+  daysRemaining: number;
+}
+
 export const DISTRACTION_CATEGORIES: { id: DistractionCategory; label: string; icon: string }[] = [
   { id: 'social_media', label: 'Social Media', icon: 'people' },
   { id: 'games', label: 'Games', icon: 'sports-esports' },

@@ -1,6 +1,7 @@
 // Powered by OnSpace.AI
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Session, DailyStats, BlockedApp, UserProfile, DEFAULT_BLOCKED_APPS } from '@/types';
+import { Session, DailyStats, BlockedApp, UserProfile, GoalTarget, DEFAULT_BLOCKED_APPS } from '@/types';
+import { differenceInDays, parseISO } from 'date-fns';
 
 const KEYS = {
   sessions: 'focus_sessions',
@@ -8,6 +9,7 @@ const KEYS = {
   lastStreakDate: 'focus_last_streak_date',
   blockedApps: 'focus_blocked_apps',
   userProfile: 'focus_user_profile',
+  goalTargets: 'focus_goal_targets',
 };
 
 export async function getSessions(): Promise<Session[]> {
@@ -192,4 +194,68 @@ export async function setUserAsReturning(): Promise<void> {
   const profile = await getUserProfile();
   profile.isNewUser = false;
   await saveUserProfile(profile);
+}
+
+export async function getGoalTargets(): Promise<GoalTarget[]> {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.goalTargets);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveGoalTargets(targets: GoalTarget[]): Promise<void> {
+  await AsyncStorage.setItem(KEYS.goalTargets, JSON.stringify(targets));
+}
+
+export async function addGoalTarget(target: Omit<GoalTarget, 'id' | 'createdAt' | 'totalDays' | 'daysElapsed' | 'daysRemaining' | 'completed'>): Promise<GoalTarget[]> {
+  const targets = await getGoalTargets();
+  const startDate = parseISO(target.startDate);
+  const targetDate = parseISO(target.targetDate);
+  const totalDays = differenceInDays(targetDate, startDate);
+  const daysElapsed = differenceInDays(new Date(), startDate);
+  const daysRemaining = differenceInDays(targetDate, new Date());
+  
+  const newTarget: GoalTarget = {
+    ...target,
+    id: `goal_${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    totalDays,
+    daysElapsed: Math.max(0, daysElapsed),
+    daysRemaining: Math.max(0, daysRemaining),
+    completed: new Date() >= targetDate,
+  };
+  
+  const updated = [newTarget, ...targets];
+  await saveGoalTargets(updated);
+  return updated;
+}
+
+export async function removeGoalTarget(id: string): Promise<GoalTarget[]> {
+  const targets = await getGoalTargets();
+  const updated = targets.filter((t) => t.id !== id);
+  await saveGoalTargets(updated);
+  return updated;
+}
+
+export async function updateGoalTargetProgress(id: string): Promise<GoalTarget[]> {
+  const targets = await getGoalTargets();
+  const updated = targets.map((t) => {
+    if (t.id === id) {
+      const startDate = parseISO(t.startDate);
+      const targetDate = parseISO(t.targetDate);
+      const daysElapsed = differenceInDays(new Date(), startDate);
+      const daysRemaining = differenceInDays(targetDate, new Date());
+      return {
+        ...t,
+        daysElapsed: Math.max(0, daysElapsed),
+        daysRemaining: Math.max(0, daysRemaining),
+        completed: new Date() >= targetDate,
+      };
+    }
+    return t;
+  });
+  await saveGoalTargets(updated);
+  return updated;
 }

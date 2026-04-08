@@ -8,6 +8,8 @@ import {
   ScrollView,
   Pressable,
   Modal,
+  useColorScheme,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -18,10 +20,11 @@ import { CircularTimer } from '@/components/ui/CircularTimer';
 import { AbandonModal } from '@/components/ui/AbandonModal';
 import { DistractionModal } from '@/components/ui/DistractionModal';
 import { SakuraAnimation } from '@/components/ui/SakuraAnimation';
+import { CountdownWidget, DaysCounterWidget, WidgetCard, GoalTargetModal } from '@/components/widgets';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { useStats } from '@/hooks/useStats';
-import { DistractionLog } from '@/types';
-import { getUserProfile } from '@/services/storageService';
+import { DistractionLog, GoalTarget } from '@/types';
+import { getUserProfile, getGoalTargets, removeGoalTarget, updateGoalTargetProgress } from '@/services/storageService';
 
 const GOALS = [
   'Studying',
@@ -35,6 +38,7 @@ const GOALS = [
 
 export default function TimerScreen() {
   const insets = useSafeAreaInsets();
+  const systemColorScheme = useColorScheme();
   const {
     phase,
     secondsLeft,
@@ -57,6 +61,23 @@ export default function TimerScreen() {
   const [showAbandon, setShowAbandon] = useState(false);
   const [showDistraction, setShowDistraction] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
+  const [showAddGoalModal, setShowAddGoalModal] = useState(false);
+  const [goalTargets, setGoalTargets] = useState<GoalTarget[]>([]);
+  const [isTransparent, setIsTransparent] = useState(systemColorScheme === 'dark');
+
+  useEffect(() => {
+    setIsTransparent(systemColorScheme === 'dark');
+  }, [systemColorScheme]);
+
+  const loadGoalTargets = useCallback(async () => {
+    const targets = await getGoalTargets();
+    const updated = await updateGoalTargetProgress(targets[0]?.id || '');
+    setGoalTargets(updated);
+  }, []);
+
+  useEffect(() => {
+    loadGoalTargets();
+  }, [loadGoalTargets]);
 
   const FOCUS_TIPS = [
     "Put your phone face-down. Interruptions reset your focus habit.",
@@ -136,6 +157,24 @@ export default function TimerScreen() {
         : 'Paused - resume when ready'
       : 'Take a break and relax';
 
+  const handleDeleteGoal = useCallback(async (id: string) => {
+    Alert.alert(
+      'Delete Goal',
+      'Are you sure you want to delete this goal?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await removeGoalTarget(id);
+            loadGoalTargets();
+          },
+        },
+      ]
+    );
+  }, [loadGoalTargets]);
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <LinearGradient
@@ -167,6 +206,76 @@ export default function TimerScreen() {
               <MaterialIcons name="settings" size={20} color={Colors.textSecondary} />
             </TouchableOpacity>
           </View>
+        </View>
+
+        <View style={styles.widgetsSection}>
+          <View style={styles.widgetsRow}>
+            <View style={styles.widgetHalf}>
+              <WidgetCard
+                title="TIME"
+                icon="schedule"
+                variant={isTransparent ? 'transparent' : 'default'}
+              >
+                <CountdownWidget 
+                  showSeconds={true}
+                  showDate={true}
+                  size="medium"
+                  variant={isTransparent ? 'transparent' : 'default'}
+                />
+              </WidgetCard>
+            </View>
+          </View>
+
+          {goalTargets.length > 0 ? (
+            <View style={styles.widgetsRow}>
+              <View style={styles.widgetFull}>
+              <WidgetCard
+                title="GOAL TRACKER"
+                icon="flag"
+                variant={isTransparent ? 'transparent' : 'default'}
+              >
+                  <DaysCounterWidget 
+                    goal={goalTargets[0]}
+                    variant={isTransparent ? 'transparent' : 'default'}
+                    showProgress={true}
+                  />
+                  <View style={styles.widgetActions}>
+                    <TouchableOpacity 
+                      style={styles.widgetActionBtn}
+                      onPress={() => setShowAddGoalModal(true)}
+                    >
+                      <MaterialIcons name="add" size={16} color={Colors.primary} />
+                      <Text style={styles.widgetActionText}>Add Goal</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.widgetActionBtn}
+                      onPress={() => handleDeleteGoal(goalTargets[0].id)}
+                    >
+                      <MaterialIcons name="delete" size={16} color={Colors.danger} />
+                      <Text style={[styles.widgetActionText, { color: Colors.danger }]}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                </WidgetCard>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={styles.addGoalCard}
+              onPress={() => setShowAddGoalModal(true)}
+            >
+              <LinearGradient
+                colors={[Colors.primary + '30', Colors.secondary + '20']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.addGoalGradient}
+              />
+              <View style={styles.addGoalContent}>
+                <MaterialIcons name="add-circle-outline" size={32} color={Colors.primary} />
+                <Text style={styles.addGoalText}>Set a Goal</Text>
+                <Text style={styles.addGoalSubtext}>Track your exam or deadline</Text>
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
 
         {penaltyActive ? (
@@ -670,5 +779,68 @@ const styles = StyleSheet.create({
   },
   goalBtnTextSelected: {
     color: Colors.white,
+  },
+  widgetsSection: {
+    marginBottom: Spacing.lg,
+    gap: Spacing.md,
+  },
+  widgetsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  widgetHalf: {
+    flex: 1,
+  },
+  widgetFull: {
+    flex: 1,
+  },
+  widgetActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.lg,
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  widgetActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+  },
+  widgetActionText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: Colors.primary,
+  },
+  addGoalCard: {
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.primary + '40',
+    borderStyle: 'dashed',
+  },
+  addGoalGradient: {
+    paddingVertical: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addGoalContent: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addGoalText: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    color: Colors.primary,
+    marginTop: Spacing.sm,
+  },
+  addGoalSubtext: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginTop: Spacing.xs,
   },
 });
