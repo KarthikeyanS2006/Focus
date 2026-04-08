@@ -189,23 +189,88 @@ function generateAmbientWav(frequencyHz: number, durationMs: number, amplitude =
 // Ambient sound types
 export type AmbientType = 'none' | 'rain' | 'forest' | 'ocean' | 'meditation';
 
-// Free ambient sound URLs from freesound.org and other sources
-const AMBIENT_SOUNDS: Record<AmbientType, { url?: string; frequency?: number; description: string }> = {
-  none: { description: 'No sound' },
+// Generate pleasant ambient chord sounds
+function generateAmbientChordWav(types: { frequencies: number[]; volumes: number[] }, durationMs: number): string {
+  const sampleRate = 22050;
+  const numSamples = Math.floor((sampleRate * durationMs) / 1000);
+  const dataSize = numSamples * 2;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+  };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  const { frequencies, volumes } = types;
+  
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const duration = durationMs / 1000;
+    
+    // Fade in/out envelope
+    const fadeIn = Math.min(1, i / (sampleRate * 0.5));
+    const fadeOut = Math.min(1, (numSamples - i) / (sampleRate * 0.5));
+    const envelope = fadeIn * fadeOut;
+    
+    // Slow modulation for ambient feel
+    const modulation = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.05 * t);
+    
+    let sample = 0;
+    for (let j = 0; j < frequencies.length; j++) {
+      const freq = frequencies[j];
+      const vol = volumes[j] || 1;
+      // Add slight detune for richness
+      const detune = 1 + 0.002 * Math.sin(2 * Math.PI * 0.1 * t + j);
+      sample += Math.sin(2 * Math.PI * freq * detune * t) * vol;
+    }
+    
+    sample = sample / frequencies.length;
+    sample = sample * envelope * modulation * 0.15;
+    
+    view.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, Math.round(sample * 32767))), true);
+  }
+
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  if (typeof btoa !== 'undefined') return btoa(binary);
+  return Buffer.from(bytes).toString('base64');
+}
+
+// Ambient sound configurations with pleasing chords
+const AMBIENT_CHORDS: Record<AmbientType, { frequencies: number[]; volumes: number[]; description: string }> = {
+  none: { frequencies: [], volumes: [], description: 'No sound' },
   rain: { 
-    url: 'https://cdn.pixabay.com/audio/2022/05/16/audio_19c53df090.mp3',
+    frequencies: [130.81, 196.00, 261.63, 329.63], // C3, G3, C4, E4 - gentle rain-like
+    volumes: [0.4, 0.3, 0.2, 0.15],
     description: 'Rain sounds' 
   },
   forest: { 
-    url: 'https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b6dcb.mp3',
-    description: 'Forest ambience with birds' 
+    frequencies: [261.63, 329.63, 392.00, 523.25], // C4, E4, G4, C5 - nature feel
+    volumes: [0.3, 0.25, 0.25, 0.2],
+    description: 'Forest ambience' 
   },
   ocean: { 
-    url: 'https://cdn.pixabay.com/audio/2022/02/07/audio_ea9ad53c97.mp3',
+    frequencies: [98.00, 146.83, 196.00, 293.66], // G2, D3, G3, D4 - wave-like
+    volumes: [0.4, 0.3, 0.2, 0.1],
     description: 'Ocean waves' 
   },
   meditation: { 
-    url: 'https://cdn.pixabay.com/audio/2021/08/04/audio_dc39bde815.mp3',
+    frequencies: [396.00, 528.00, 639.00, 741.00], // Solfeggio frequencies - healing
+    volumes: [0.35, 0.25, 0.2, 0.2],
     description: 'Meditation bells' 
   },
 };
@@ -219,11 +284,13 @@ export async function playAmbientSound(type: AmbientType): Promise<void> {
     }
 
     await ensureAudioMode();
-    const soundConfig = AMBIENT_SOUNDS[type];
+    const chord = AMBIENT_CHORDS[type];
     
-    if (soundConfig.url) {
+    if (chord.frequencies.length > 0) {
+      const b64 = generateAmbientChordWav(chord, 10000);
+      const uri = `data:audio/wav;base64,${b64}`;
       const { sound } = await Audio.Sound.createAsync(
-        { uri: soundConfig.url },
+        { uri },
         { 
           volume: 0.5,
           isLooping: true,
@@ -231,19 +298,9 @@ export async function playAmbientSound(type: AmbientType): Promise<void> {
         }
       );
       soundAmbient = sound;
-    } else {
-      const freq = 200 + Math.random() * 100;
-      const b64 = generateAmbientWav(freq, 8000, 0.05);
-      const uri = `data:audio/wav;base64,${b64}`;
-      const { sound } = await Audio.Sound.createAsync({ uri }, { 
-        volume: 0.3,
-        isLooping: true,
-        shouldPlay: true,
-      });
-      soundAmbient = sound;
     }
   } catch (error) {
-    console.log('Failed to play ambient sound:', error);
+    console.log('Ambient sound not available:', error);
   }
 }
 
