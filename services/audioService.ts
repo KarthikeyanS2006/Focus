@@ -189,46 +189,62 @@ function generateAmbientWav(frequencyHz: number, durationMs: number, amplitude =
 // Ambient sound types
 export type AmbientType = 'none' | 'rain' | 'forest' | 'ocean' | 'meditation';
 
-const AMBIENT_FREQUENCIES: Record<AmbientType, number> = {
-  none: 0,
-  rain: 200,
-  forest: 300,
-  ocean: 150,
-  meditation: 396,
+// Free ambient sound URLs from freesound.org and other sources
+const AMBIENT_SOUNDS: Record<AmbientType, { url?: string; frequency?: number; description: string }> = {
+  none: { description: 'No sound' },
+  rain: { 
+    url: 'https://cdn.pixabay.com/audio/2022/05/16/audio_19c53df090.mp3',
+    description: 'Rain sounds' 
+  },
+  forest: { 
+    url: 'https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b6dcb.mp3',
+    description: 'Forest ambience with birds' 
+  },
+  ocean: { 
+    url: 'https://cdn.pixabay.com/audio/2022/02/07/audio_ea9ad53c97.mp3',
+    description: 'Ocean waves' 
+  },
+  meditation: { 
+    url: 'https://cdn.pixabay.com/audio/2021/08/04/audio_dc39bde815.mp3',
+    description: 'Meditation bells' 
+  },
 };
 
 export async function playAmbientSound(type: AmbientType): Promise<void> {
   try {
-    if (ambientLoopInterval) {
-      clearInterval(ambientLoopInterval);
-      ambientLoopInterval = null;
-    }
+    await stopAmbientSound();
+    
     if (type === 'none') {
-      await soundAmbient?.stopAsync();
       return;
     }
 
     await ensureAudioMode();
-    const freq = AMBIENT_FREQUENCIES[type];
-    const b64 = generateAmbientWav(freq, 8000, 0.08);
-    const uri = `data:audio/wav;base64,${b64}`;
+    const soundConfig = AMBIENT_SOUNDS[type];
     
-    if (!soundAmbient) {
-      const { sound } = await Audio.Sound.createAsync({ uri }, { 
-        volume: 0.3,
-        isLooping: true,
-      });
+    if (soundConfig.url) {
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: soundConfig.url },
+        { 
+          volume: 0.5,
+          isLooping: true,
+          shouldPlay: true,
+        }
+      );
       soundAmbient = sound;
     } else {
-      await soundAmbient.unloadAsync();
+      const freq = 200 + Math.random() * 100;
+      const b64 = generateAmbientWav(freq, 8000, 0.05);
+      const uri = `data:audio/wav;base64,${b64}`;
       const { sound } = await Audio.Sound.createAsync({ uri }, { 
         volume: 0.3,
         isLooping: true,
+        shouldPlay: true,
       });
       soundAmbient = sound;
     }
-    await soundAmbient.playAsync();
-  } catch {}
+  } catch (error) {
+    console.log('Failed to play ambient sound:', error);
+  }
 }
 
 export async function stopAmbientSound(): Promise<void> {
