@@ -1,6 +1,6 @@
 // Powered by Sakura Focus - Settings Screen
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Switch, Share } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Switch, Share, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme
 import { BlockedApp, DISTRACTION_CATEGORIES, DistractionCategory } from '@/types';
 import { getBlockedApps, addBlockedApp, removeBlockedApp, getUserProfile, saveUserProfile } from '@/services/storageService';
 import { SakuraAnimation } from '@/components/ui/SakuraAnimation';
+import { AmbientType, playAmbientSound } from '@/services/audioService';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -24,6 +25,7 @@ export default function SettingsScreen() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [hasNotificationPermission, setHasNotificationPermission] = useState(false);
+  const [ambientType, setAmbientType] = useState<AmbientType>('none');
 
   const loadData = useCallback(async () => {
     const apps = await getBlockedApps();
@@ -298,6 +300,51 @@ export default function SettingsScreen() {
                 trackColor={{ false: Colors.border, true: Colors.primary }}
                 thumbColor={Colors.white}
               />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Ambient Sounds</Text>
+          <Text style={styles.sectionSubtitle}>
+            Peaceful sounds during focus time
+          </Text>
+          <View style={styles.card}>
+            <View style={styles.ambientGrid}>
+              {(['none', 'rain', 'forest', 'ocean', 'meditation'] as AmbientType[]).map((type) => (
+                <Pressable
+                  key={type}
+                  style={[
+                    styles.ambientBtn,
+                    ambientType === type && styles.ambientBtnActive,
+                  ]}
+                  onPress={() => {
+                    setAmbientType(type);
+                    if (type !== 'none') {
+                      playAmbientSound(type);
+                    }
+                  }}
+                >
+                  <MaterialIcons
+                    name={
+                      type === 'none' ? 'volume-off' :
+                      type === 'rain' ? 'water-drop' :
+                      type === 'forest' ? 'forest' :
+                      type === 'ocean' ? 'waves' : 'self-improvement'
+                    }
+                    size={24}
+                    color={ambientType === type ? Colors.white : Colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.ambientBtnText,
+                      ambientType === type && styles.ambientBtnTextActive,
+                    ]}
+                  >
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
           </View>
         </View>
@@ -674,5 +721,37 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
     lineHeight: 22,
+  },
+  ambientGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  ambientBtn: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.primaryMuted,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.primary + '40',
+    minWidth: '30%',
+    flexGrow: 1,
+  },
+  ambientBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  ambientBtnText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.medium,
+    color: Colors.primary,
+    textAlign: 'center',
+  },
+  ambientBtnTextActive: {
+    color: Colors.white,
   },
 });

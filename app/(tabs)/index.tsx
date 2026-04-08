@@ -330,7 +330,6 @@ export default function TimerScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.mainBtn,
-            phase === 'break' && styles.mainBtnBreak,
             pressed && styles.mainBtnPressed,
           ]}
           onPress={handleMainAction}
@@ -338,12 +337,12 @@ export default function TimerScreen() {
           <LinearGradient
             colors={
               phase === 'break'
-                ? [Colors.success, Colors.successMuted]
+                ? [Colors.success, Colors.success]
                 : [Colors.primary, Colors.secondary]
             }
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.mainBtnGradient}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFill}
           />
           <View style={styles.mainBtnContent}>
             <MaterialIcons name={mainBtnIcon} size={28} color={Colors.white} />
@@ -356,38 +355,44 @@ export default function TimerScreen() {
             {phase === 'focus' ? (
               <Pressable
                 style={({ pressed }) => [
-                  styles.secondaryBtn,
-                  styles.secondaryBtnDistraction,
-                  pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] },
+                  styles.secondaryBtnFull,
+                  { backgroundColor: Colors.primary },
+                  pressed && styles.secondaryBtnPressed,
                 ]}
                 onPress={() => setShowDistraction(true)}
               >
-                <MaterialIcons name="add" size={18} color={Colors.primary} />
-                <Text style={[styles.secondaryBtnText, { color: Colors.primary }]}>
+                <MaterialIcons name="add" size={18} color={Colors.white} />
+                <Text style={[styles.secondaryBtnTextWhite]}>
                   Distraction{distractionCount > 0 ? ` (${distractionCount})` : ''}
                 </Text>
               </Pressable>
             ) : null}
             {phase === 'break' ? (
-              <TouchableOpacity
-                style={styles.secondaryBtn}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.secondaryBtnFull,
+                  { backgroundColor: Colors.success },
+                  pressed && styles.secondaryBtnPressed,
+                ]}
                 onPress={skipBreak}
-                activeOpacity={0.75}
               >
-                <MaterialIcons name="skip-next" size={18} color={Colors.textSecondary} />
-                <Text style={styles.secondaryBtnText}>Skip Break</Text>
-              </TouchableOpacity>
+                <MaterialIcons name="skip-next" size={18} color={Colors.white} />
+                <Text style={styles.secondaryBtnTextWhite}>Skip Break</Text>
+              </Pressable>
             ) : null}
-            <TouchableOpacity
-              style={[styles.secondaryBtn, styles.secondaryBtnDanger]}
+            <Pressable
+              style={({ pressed }) => [
+                styles.secondaryBtnFull,
+                { backgroundColor: Colors.danger },
+                pressed && styles.secondaryBtnPressed,
+              ]}
               onPress={() => setShowAbandon(true)}
-              activeOpacity={0.75}
             >
-              <MaterialIcons name="stop" size={18} color={Colors.danger} />
-              <Text style={[styles.secondaryBtnText, { color: Colors.danger }]}>
+              <MaterialIcons name="stop" size={18} color={Colors.white} />
+              <Text style={styles.secondaryBtnTextWhite}>
                 Abandon
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         ) : null}
 
@@ -477,6 +482,14 @@ export default function TimerScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <GoalTargetModal
+        visible={showAddGoalModal}
+        onClose={() => {
+          setShowAddGoalModal(false);
+          loadGoalTargets();
+        }}
+      />
     </View>
   );
 }
@@ -615,8 +628,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     overflow: 'hidden',
     marginBottom: Spacing.md,
+    minHeight: 56,
+    justifyContent: 'center',
   },
   mainBtnGradient: {
+    ...StyleSheet.absoluteFillObject,
     paddingVertical: Spacing.md + 4,
     alignItems: 'center',
     justifyContent: 'center',
@@ -626,6 +642,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
+    paddingVertical: Spacing.md + 4,
   },
   mainBtnBreak: {},
   mainBtnPressed: {
@@ -654,6 +671,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  secondaryBtnFull: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.md,
+  },
+  secondaryBtnPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.96 }],
+  },
   secondaryBtnDistraction: {
     borderColor: Colors.primary + '40',
     backgroundColor: Colors.primaryMuted,
@@ -665,6 +695,11 @@ const styles = StyleSheet.create({
   secondaryBtnText: {
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
+    fontWeight: FontWeight.medium,
+  },
+  secondaryBtnTextWhite: {
+    fontSize: FontSize.sm,
+    color: Colors.white,
     fontWeight: FontWeight.medium,
   },
   tipCard: {
