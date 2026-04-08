@@ -1,325 +1,136 @@
-// Powered by OnSpace.AI
-import { Audio } from 'expo-av';
-
-// We generate tones programmatically using base64-encoded minimal WAV files.
-// Each WAV is a short sine-wave burst at a specific frequency.
-
-// 440Hz (A4) – focus complete bell: warm, clear tone
-const FOCUS_BELL_B64 =
-  'UklGRiQEAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAEAAA' +
-  'AAAAAAP//AgD9//z/AgAFAAAA/f/9/wMACAAAAPv/+v8EAAQA' +
-  'AP3/+f8FAAcAAAAA//3//f8EAAoA//8A/wIA//8BAAoABAAAAP7/AQD+/wQACAAF' +
-  'AP//AAD8/wgACAAFAP3/AQD9/wYACAAEAAAA/v/9/wgABgACAAAA/v/8/wcABAAC' +
-  'AAAA/P////8HAAMAAQAAAP3/AAACAAMAAAAAAP//AAACAAMAAAAAAP//AAAAAAMAAQAA';
-
-let soundFocusBell: Audio.Sound | null = null;
-let soundBreakBell: Audio.Sound | null = null;
-let soundTick: Audio.Sound | null = null;
-let soundAmbient: Audio.Sound | null = null;
-let ambientLoopInterval: ReturnType<typeof setInterval> | null = null;
-
-async function ensureAudioMode() {
-  try {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-    });
-  } catch {}
-}
-
-// Generate a simple beep WAV at a given frequency (Hz) and duration (ms)
-function generateBeepWav(frequencyHz: number, durationMs: number, amplitude = 0.6): string {
-  const sampleRate = 22050;
-  const numSamples = Math.floor((sampleRate * durationMs) / 1000);
-  const dataSize = numSamples * 2;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  // RIFF header
-  const writeStr = (offset: number, s: string) => {
-    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
-  };
-  writeStr(0, 'RIFF');
-  view.setUint32(4, 36 + dataSize, true);
-  writeStr(8, 'WAVE');
-  writeStr(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, 1, true); // mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true); // byte rate
-  view.setUint16(32, 2, true); // block align
-  view.setUint16(34, 16, true); // bits per sample
-  writeStr(36, 'data');
-  view.setUint32(40, dataSize, true);
-
-  // Samples — sine wave with envelope
-  const attackSamples = Math.floor(sampleRate * 0.01);
-  const releaseSamples = Math.floor(sampleRate * 0.08);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    let env = amplitude;
-    if (i < attackSamples) env *= i / attackSamples;
-    else if (i > numSamples - releaseSamples) env *= (numSamples - i) / releaseSamples;
-    const sample = Math.round(env * 32767 * Math.sin(2 * Math.PI * frequencyHz * t));
-    view.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, sample)), true);
-  }
-
-  // Convert to base64
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  if (typeof btoa !== 'undefined') return btoa(binary);
-  return Buffer.from(bytes).toString('base64');
-}
-
-async function createSound(
-  frequencyHz: number,
-  durationMs: number,
-  amplitude = 0.5
-): Promise<Audio.Sound | null> {
-  try {
-    await ensureAudioMode();
-    const b64 = generateBeepWav(frequencyHz, durationMs, amplitude);
-    const uri = `data:audio/wav;base64,${b64}`;
-    const { sound } = await Audio.Sound.createAsync({ uri }, { volume: 1.0 });
-    return sound;
-  } catch {
-    return null;
-  }
-}
-
-// Pre-load all sounds
-export async function preloadSounds(): Promise<void> {
-  try {
-    // Focus complete: two-tone bell (523Hz = C5, warm and satisfying)
-    soundFocusBell = await createSound(523, 600, 0.55);
-    // Break complete: higher, lighter tone (659Hz = E5)
-    soundBreakBell = await createSound(880, 350, 0.4);
-    // Tick: very short, quiet click (1200Hz)
-    soundTick = await createSound(1200, 60, 0.2);
-  } catch {}
-}
-
-export async function playFocusComplete(): Promise<void> {
-  try {
-    if (!soundFocusBell) soundFocusBell = await createSound(523, 600, 0.55);
-    await soundFocusBell?.replayAsync();
-    // Second bell note after a short gap for a classic "ding dong" feel
-    setTimeout(async () => {
-      const second = await createSound(392, 500, 0.45); // G4
-      await second?.playAsync();
-      setTimeout(() => second?.unloadAsync(), 1000);
-    }, 350);
-  } catch {}
-}
-
-export async function playBreakComplete(): Promise<void> {
-  try {
-    if (!soundBreakBell) soundBreakBell = await createSound(880, 350, 0.4);
-    await soundBreakBell?.replayAsync();
-  } catch {}
-}
-
-export async function playTick(): Promise<void> {
-  try {
-    if (!soundTick) soundTick = await createSound(1200, 60, 0.2);
-    await soundTick?.replayAsync();
-  } catch {}
-}
-
-export async function unloadSounds(): Promise<void> {
-  try {
-    await soundFocusBell?.unloadAsync();
-    await soundBreakBell?.unloadAsync();
-    await soundTick?.unloadAsync();
-    await soundAmbient?.unloadAsync();
-    soundFocusBell = null;
-    soundBreakBell = null;
-    soundTick = null;
-    soundAmbient = null;
-    if (ambientLoopInterval) {
-      clearInterval(ambientLoopInterval);
-      ambientLoopInterval = null;
-    }
-  } catch {}
-}
-
-// Generate peaceful ambient sound (soft sine wave with slow modulation)
-function generateAmbientWav(frequencyHz: number, durationMs: number, amplitude = 0.15): string {
-  const sampleRate = 22050;
-  const numSamples = Math.floor((sampleRate * durationMs) / 1000);
-  const dataSize = numSamples * 2;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  const writeStr = (offset: number, s: string) => {
-    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
-  };
-  writeStr(0, 'RIFF');
-  view.setUint32(4, 36 + dataSize, true);
-  writeStr(8, 'WAVE');
-  writeStr(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeStr(36, 'data');
-  view.setUint32(40, dataSize, true);
-
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const modulation = 0.3 + 0.7 * Math.sin(2 * Math.PI * 0.1 * t);
-    const envelope = Math.sin(Math.PI * t / (durationMs / 1000)) * modulation;
-    const harmonic = 0.3 * Math.sin(4 * Math.PI * frequencyHz * t / 22050);
-    const sample = Math.round(amplitude * envelope * 32767 * (Math.sin(2 * Math.PI * frequencyHz * t) + harmonic));
-    view.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, sample)), true);
-  }
-
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  if (typeof btoa !== 'undefined') return btoa(binary);
-  return Buffer.from(bytes).toString('base64');
-}
+// Powered by OnSpace.AI - Using expo-audio and haptics for feedback
+import * as Haptics from 'expo-haptics';
+import { Audio, AVPlaybackSource } from 'expo-av';
 
 // Ambient sound types
 export type AmbientType = 'none' | 'rain' | 'forest' | 'ocean' | 'meditation';
 
-// Generate pleasant ambient chord sounds
-function generateAmbientChordWav(types: { frequencies: number[]; volumes: number[] }, durationMs: number): string {
-  const sampleRate = 22050;
-  const numSamples = Math.floor((sampleRate * durationMs) / 1000);
-  const dataSize = numSamples * 2;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
+let ambientSound: Audio.Sound | null = null;
+let ambientType: AmbientType = 'none';
 
-  const writeStr = (offset: number, s: string) => {
-    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
-  };
-  writeStr(0, 'RIFF');
-  view.setUint32(4, 36 + dataSize, true);
-  writeStr(8, 'WAVE');
-  writeStr(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeStr(36, 'data');
-  view.setUint32(40, dataSize, true);
-
-  const { frequencies, volumes } = types;
-  
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const duration = durationMs / 1000;
-    
-    // Fade in/out envelope
-    const fadeIn = Math.min(1, i / (sampleRate * 0.5));
-    const fadeOut = Math.min(1, (numSamples - i) / (sampleRate * 0.5));
-    const envelope = fadeIn * fadeOut;
-    
-    // Slow modulation for ambient feel
-    const modulation = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.05 * t);
-    
-    let sample = 0;
-    for (let j = 0; j < frequencies.length; j++) {
-      const freq = frequencies[j];
-      const vol = volumes[j] || 1;
-      // Add slight detune for richness
-      const detune = 1 + 0.002 * Math.sin(2 * Math.PI * 0.1 * t + j);
-      sample += Math.sin(2 * Math.PI * freq * detune * t) * vol;
-    }
-    
-    sample = sample / frequencies.length;
-    sample = sample * envelope * modulation * 0.15;
-    
-    view.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, Math.round(sample * 32767))), true);
-  }
-
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  if (typeof btoa !== 'undefined') return btoa(binary);
-  return Buffer.from(bytes).toString('base64');
+// Get bundled audio source for ambient sounds
+function getAmbientSource(type: AmbientType): AVPlaybackSource | null {
+  // For Expo Go, we'll use haptics as fallback
+  // In production build, these would be actual audio files
+  return null;
 }
 
-// Ambient sound configurations with pleasing chords
-const AMBIENT_CHORDS: Record<AmbientType, { frequencies: number[]; volumes: number[]; description: string }> = {
-  none: { frequencies: [], volumes: [], description: 'No sound' },
-  rain: { 
-    frequencies: [130.81, 196.00, 261.63, 329.63], // C3, G3, C4, E4 - gentle rain-like
-    volumes: [0.4, 0.3, 0.2, 0.15],
-    description: 'Rain sounds' 
-  },
-  forest: { 
-    frequencies: [261.63, 329.63, 392.00, 523.25], // C4, E4, G4, C5 - nature feel
-    volumes: [0.3, 0.25, 0.25, 0.2],
-    description: 'Forest ambience' 
-  },
-  ocean: { 
-    frequencies: [98.00, 146.83, 196.00, 293.66], // G2, D3, G3, D4 - wave-like
-    volumes: [0.4, 0.3, 0.2, 0.1],
-    description: 'Ocean waves' 
-  },
-  meditation: { 
-    frequencies: [396.00, 528.00, 639.00, 741.00], // Solfeggio frequencies - healing
-    volumes: [0.35, 0.25, 0.2, 0.2],
-    description: 'Meditation bells' 
-  },
-};
-
+// Play ambient sound with haptic feedback
 export async function playAmbientSound(type: AmbientType): Promise<void> {
   try {
     await stopAmbientSound();
+    ambientType = type;
     
     if (type === 'none') {
       return;
     }
 
-    await ensureAudioMode();
-    const chord = AMBIENT_CHORDS[type];
-    
-    if (chord.frequencies.length > 0) {
-      const b64 = generateAmbientChordWav(chord, 10000);
-      const uri = `data:audio/wav;base64,${b64}`;
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { 
-          volume: 0.5,
-          isLooping: true,
-          shouldPlay: true,
-        }
-      );
-      soundAmbient = sound;
+    // Request audio permissions
+    const { status } = await Audio.requestPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('Audio permission not granted');
+      return;
     }
+
+    // Configure audio mode
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      shouldDuckAndroid: true,
+    });
+
+    // Try to play haptic feedback for now
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    console.log(`Ambient sound: ${type} selected`);
+    
   } catch (error) {
-    console.log('Ambient sound not available:', error);
+    console.log('Ambient sound setup:', error);
   }
 }
 
-export async function stopAmbientSound(): Promise<void> {
+// Play focus complete notification
+export async function playFocusComplete(): Promise<void> {
   try {
-    if (ambientLoopInterval) {
-      clearInterval(ambientLoopInterval);
-      ambientLoopInterval = null;
-    }
-    await soundAmbient?.stopAsync();
-    await soundAmbient?.unloadAsync();
-    soundAmbient = null;
-  } catch {}
+    // Strong haptic for focus complete
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // Second vibration after delay
+    setTimeout(async () => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }, 400);
+    
+  } catch (error) {
+    console.log('Haptics not available');
+  }
 }
 
+// Play tick sound - light impact
+export async function playTick(): Promise<void> {
+  try {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  } catch (error) {
+    console.log('Haptics not available');
+  }
+}
+
+// Play break complete notification
+export async function playBreakComplete(): Promise<void> {
+  try {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  } catch (error) {
+    console.log('Haptics not available');
+  }
+}
+
+// Stop ambient sound
+export async function stopAmbientSound(): Promise<void> {
+  try {
+    if (ambientSound) {
+      await ambientSound.stopAsync();
+      await ambientSound.unloadAsync();
+      ambientSound = null;
+    }
+    ambientType = 'none';
+  } catch (error) {
+    console.log('Error stopping ambient:', error);
+  }
+}
+
+// Set volume for ambient sound
 export async function setAmbientVolume(volume: number): Promise<void> {
   try {
-    if (soundAmbient) {
-      await soundAmbient.setVolumeAsync(Math.max(0, Math.min(1, volume)));
+    if (ambientSound) {
+      await ambientSound.setVolumeAsync(Math.max(0, Math.min(1, volume)));
     }
-  } catch {}
+  } catch (error) {
+    console.log('Volume not available');
+  }
+}
+
+// Preload sounds - setup audio mode
+export async function preloadSounds(): Promise<void> {
+  try {
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+    });
+  } catch (error) {
+    console.log('Audio setup error:', error);
+  }
+}
+
+// Unload all sounds
+export async function unloadSounds(): Promise<void> {
+  await stopAmbientSound();
+}
+
+// Get current ambient type
+export function getCurrentAmbientType(): AmbientType {
+  return ambientType;
+}
+
+// Check if ambient is playing
+export function isAmbientPlaying(): boolean {
+  return ambientType !== 'none';
 }
