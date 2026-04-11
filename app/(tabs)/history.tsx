@@ -7,7 +7,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useStats } from '@/hooks/useStats';
 import { SakuraAnimation } from '@/components/ui/SakuraAnimation';
-import { AnimeCompanion } from '@/components/ui/AnimeCompanion';
 import { Session } from '@/types';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 
@@ -129,15 +128,6 @@ export default function HistoryScreen() {
         />
       )}
 
-      <AnimeCompanion
-        state={{
-          currentScreen: 'history',
-          todayMinutes: 0,
-          streak: 0,
-          distractionCount: 0,
-          isActive: true,
-        }}
-      />
     </View>
   );
 }

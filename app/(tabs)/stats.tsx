@@ -9,7 +9,6 @@ import { StatCard } from '@/components/ui/StatCard';
 import { WeekChart } from '@/components/ui/WeekChart';
 import { ScoreRing } from '@/components/ui/ScoreRing';
 import { SakuraAnimation } from '@/components/ui/SakuraAnimation';
-import { AnimeCompanion } from '@/components/ui/AnimeCompanion';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { useTimer } from '@/hooks/useTimer';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -161,15 +160,6 @@ export default function StatsScreen() {
         <View style={{ height: Spacing.xxl }} />
       </ScrollView>
 
-      <AnimeCompanion
-        state={{
-          currentScreen: 'stats',
-          todayMinutes: todayMinutes,
-          streak: streak,
-          distractionCount: totalWeekDistractions,
-          isActive: true,
-        }}
-      />
     </View>
   );
 }
