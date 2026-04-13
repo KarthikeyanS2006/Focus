@@ -19,44 +19,13 @@ const AMBIENT_INFO: Record<AmbientType, { name: string; icon: string }> = {
   meditation: { name: 'Meditation', icon: 'self-improvement' },
 };
 
-const NETWORK_FALLBACK_URLS: Record<AmbientType, string | null> = {
-  none: null,
-  rain: 'https://cdn.pixabay.com/audio/2022/05/16/audio_19c53df090.mp3',
-  forest: 'https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b6dcb.mp3',
-  ocean: 'https://cdn.pixabay.com/audio/2022/02/07/audio_ea9ad53c97.mp3',
-  meditation: 'https://cdn.pixabay.com/audio/2021/08/04/audio_dc39bde815.mp3',
+const NETWORK_SOUNDS: Record<AmbientType, string> = {
+  none: '',
+  rain: 'https://www.soundjay.com/nature/sounds/rain-01.mp3',
+  forest: 'https://www.soundjay.com/nature/sounds/forest-1.mp3',
+  ocean: 'https://www.soundjay.com/nature/sounds/ocean-waves-1.mp3',
+  meditation: 'https://www.soundjay.com/nature/sounds/wind-1.mp3',
 };
-
-async function tryPlayWithLocalFile(soundFile: any, type: AmbientType): Promise<boolean> {
-  try {
-    const { sound } = await Audio.Sound.createAsync(
-      soundFile,
-      { isLooping: true, shouldPlay: true, volume: 0.5 }
-    );
-    ambientSound = sound;
-    console.log(`Playing ${type} (local file)`);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function tryPlayWithNetwork(type: AmbientType): Promise<boolean> {
-  const url = NETWORK_FALLBACK_URLS[type];
-  if (!url) return false;
-  
-  try {
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: url },
-      { isLooping: true, shouldPlay: true, volume: 0.5 }
-    );
-    ambientSound = sound;
-    console.log(`Playing ${type} (network fallback)`);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export async function playAmbientSound(type: AmbientType, durationMinutes?: number): Promise<boolean> {
   try {
@@ -74,8 +43,12 @@ export async function playAmbientSound(type: AmbientType, durationMinutes?: numb
 
     const { status } = await Audio.requestPermissionsAsync();
     if (status !== 'granted') {
-      console.log('Audio permission not granted');
-      return false;
+      console.log('Audio permission not granted, requesting...');
+      const granted = await Audio.requestPermissionsAsync();
+      if (granted.status !== 'granted') {
+        console.log('Audio permission denied');
+        return false;
+      }
     }
 
     await Audio.setAudioModeAsync({
@@ -84,33 +57,29 @@ export async function playAmbientSound(type: AmbientType, durationMinutes?: numb
       shouldDuckAndroid: true,
     });
 
-    const localSoundFiles: Record<AmbientType, any> = {
-      none: null,
-      rain: require('../../assets/sounds/rain.mp3'),
-      forest: require('../../assets/sounds/forest.mp3'),
-      ocean: require('../../assets/sounds/ocean.mp3'),
-      meditation: require('../../assets/sounds/meditation.mp3'),
-    };
-
-    const localFile = localSoundFiles[type];
-    
-    let success = false;
-    if (localFile) {
-      success = await tryPlayWithLocalFile(localFile, type);
-    }
-    
-    if (!success) {
-      console.log('Local file not found, trying network...');
-      success = await tryPlayWithNetwork(type);
+    const url = NETWORK_SOUNDS[type];
+    if (!url) {
+      currentSettings.type = 'none';
+      return true;
     }
 
-    if (!success) {
-      console.log('All playback methods failed for:', type);
-    }
-    
-    return success;
+    console.log(`Playing ambient sound: ${type} from ${url}`);
+
+    const { sound } = await Audio.Sound.createAsync(
+      { uri: url },
+      { 
+        isLooping: true,
+        shouldPlay: true,
+        volume: 0.6,
+      }
+    );
+
+    ambientSound = sound;
+    console.log(`Ambient sound ${type} started successfully`);
+    return true;
   } catch (error) {
     console.log('Failed to play ambient sound:', error);
+    currentSettings.type = 'none';
     return false;
   }
 }
@@ -124,6 +93,7 @@ export async function stopAmbientSound(): Promise<void> {
     }
   } catch (error) {
     console.log('Error stopping ambient:', error);
+    ambientSound = null;
   }
 }
 
@@ -165,8 +135,95 @@ export function getAllAmbientTypes(): AmbientType[] {
 
 export const LOOP_DURATIONS = [10, 20, 30, 60];
 
+export async function playFocusCompleteSound(): Promise<boolean> {
+  try {
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+    });
+    
+    const { sound } = await Audio.Sound.createAsync(
+      { uri: 'https://www.soundjay.com/ui/sounds/ui-button-01.mp3' },
+      { shouldPlay: true, volume: 0.8 }
+    );
+    
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (status.isLoaded && status.didJustFinish) {
+        sound.unloadAsync();
+      }
+    });
+    
+    return true;
+  } catch (error) {
+    console.log('Error playing focus complete sound:', error);
+    return false;
+  }
+}
+
+export async function playBreakCompleteSound(): Promise<boolean> {
+  try {
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+    });
+    
+    const { sound } = await Audio.Sound.createAsync(
+      { uri: 'https://www.soundjay.com/ui/sounds/ui-button-02.mp3' },
+      { shouldPlay: true, volume: 0.8 }
+    );
+    
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (status.isLoaded && status.didJustFinish) {
+        sound.unloadAsync();
+      }
+    });
+    
+    return true;
+  } catch (error) {
+    console.log('Error playing break complete sound:', error);
+    return false;
+  }
+}
+
+export async function playTickSound(): Promise<boolean> {
+  try {
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+    });
+    
+    const { sound } = await Audio.Sound.createAsync(
+      { uri: 'https://www.soundjay.com/buttons/sounds/button-09.mp3' },
+      { shouldPlay: true, volume: 0.3 }
+    );
+    
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (status.isLoaded && status.didJustFinish) {
+        sound.unloadAsync();
+      }
+    });
+    
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Legacy exports for compatibility
-export async function playFocusComplete(): Promise<void> {}
-export async function playBreakComplete(): Promise<void> {}
-export async function playTick(): Promise<void> {}
-export async function setAmbientVolume(volume: number): Promise<void> {}
+export async function playFocusComplete(): Promise<void> {
+  await playFocusCompleteSound();
+}
+
+export async function playBreakComplete(): Promise<void> {
+  await playBreakCompleteSound();
+}
+
+export async function playTick(): Promise<void> {
+  await playTickSound();
+}
+
+export async function setAmbientVolume(volume: number): Promise<void> {
+  if (ambientSound) {
+    await ambientSound.setVolumeAsync(volume);
+  }
+}

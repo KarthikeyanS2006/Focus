@@ -3,6 +3,7 @@ import { Stack, router } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { TimerProvider } from '@/contexts/TimerContext';
+import { BlockedAppsProvider, useBlockedApps } from '@/contexts/BlockedAppsContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet, BackHandler } from 'react-native';
@@ -54,19 +55,21 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <TimerProvider>
-          <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen 
-              name="settings" 
-              options={{ 
-                animation: 'slide_from_right',
-                presentation: 'modal'
-              }} 
-            />
-          </Stack>
-          <InitialRoute />
+          <BlockedAppsProvider>
+            <StatusBar style="light" />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen 
+                name="settings" 
+                options={{ 
+                  animation: 'slide_from_right',
+                  presentation: 'modal'
+                }} 
+              />
+            </Stack>
+            <InitialRoute />
+          </BlockedAppsProvider>
         </TimerProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
