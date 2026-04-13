@@ -10,7 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sakurafocus.app"
+      "bundleIdentifier": "com.sakurafocus.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Sakura Focus needs microphone access for voice notifications.",
+        "UIBackgroundModes": ["audio", "fetch", "remote-notification"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +22,13 @@
         "backgroundColor": "#0a0a0a"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.sakurafocus.app"
+      "package": "com.sakurafocus.app",
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -36,7 +46,21 @@
           "backgroundColor": "#0a0a0a"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow Sakura Focus to access your microphone for voice notifications."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo.png",
+          "color": "#ffb7c5",
+          "sounds": []
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

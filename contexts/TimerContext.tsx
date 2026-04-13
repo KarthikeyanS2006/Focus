@@ -1,8 +1,9 @@
 // Powered by OnSpace.AI
 import React, { createContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
+import * as Speech from 'expo-speech';
 import { Session, TimerPhase, DistractionLog } from '@/types';
-import { saveSession, updateStreak, getStreak } from '@/services/storageService';
+import { saveSession, updateStreak, getStreak, getAppSettings } from '@/services/storageService';
 import {
   preloadSounds,
   unloadSounds,
@@ -10,6 +11,11 @@ import {
   playBreakComplete,
   playTick,
 } from '@/services/audioService';
+import {
+  scheduleTimerNotification,
+  cancelAllNotifications,
+  initializeNotifications,
+} from '@/services/notificationService';
 
 const FOCUS_SECONDS = 25 * 60;
 const BREAK_SECONDS = 5 * 60;
@@ -68,7 +74,11 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     getStreak().then(setStreak);
     preloadSounds();
-    return () => { unloadSounds(); };
+    initializeNotifications();
+    return () => { 
+      unloadSounds();
+      cancelAllNotifications();
+    };
   }, []);
 
   const clearTimer = () => {
@@ -85,10 +95,20 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     const currentPhase = phaseRef.current;
     const durationMinutes = currentPhase === 'focus' ? 25 : 5;
 
+    const settings = await getAppSettings();
+    
     if (currentPhase === 'focus') {
       await playFocusComplete();
+      if (settings.voiceEnabled) {
+        Speech.speak("Focus session complete! Great job! Time for a break.", { language: 'en-US' });
+      }
+      await scheduleTimerNotification(BREAK_SECONDS, 'break', 'Break time! Relax and recharge.');
     } else {
       await playBreakComplete();
+      if (settings.voiceEnabled) {
+        Speech.speak("Break is over. Ready to focus again?", { language: 'en-US' });
+      }
+      await scheduleTimerNotification(FOCUS_SECONDS, 'focus', 'Focus time! You can do it!');
     }
 
     const session: Session = {
