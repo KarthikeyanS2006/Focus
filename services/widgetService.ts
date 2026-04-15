@@ -1,17 +1,16 @@
 // Widget service - Android Home Screen Widget support
-// Note: Native Android widgets require a separate widget extension module
-// This provides the data and bridge for when native module is implemented
-
-import { Platform, Alert, Linking } from 'react-native';
+import { Platform, NativeModules, Alert, Linking, NativeEventEmitter } from 'react-native';
 
 export interface WidgetData {
-  type: 'timer' | 'stats' | 'goal';
-  title: string;
-  subtitle: string;
-  progress?: number;
+  phase: 'idle' | 'focus' | 'break';
+  secondsLeft: number;
+  streak: number;
+  goal: string;
+  round: number;
+  isRunning: boolean;
 }
 
-let currentWidgetData: WidgetData | null = null;
+const { FocusWidgetModule } = NativeModules;
 
 export function isAndroidWidgetSupported(): boolean {
   return Platform.OS === 'android';
@@ -21,45 +20,50 @@ export async function requestWidgetPermission(): Promise<boolean> {
   if (Platform.OS !== 'android') {
     Alert.alert(
       'Widgets',
-      'Home screen widgets are only available on Android devices.\n\nFor iOS, you can use Shortcuts to create timer widgets.'
+      'Home screen widgets are only available on Android devices.'
     );
     return false;
   }
 
-  try {
-    // In a full implementation, this would request ADDITIONAL_WIDGETS permission
-    Alert.alert(
-      'Add Widget',
-      'To add the Sakura Focus widget:\n\n1. Long press on your home screen\n2. Search for "Sakura Focus" or "Focus"\n3. Select the widget and place it',
-      [
-        { text: 'OK' },
-        { text: 'Open Settings', onPress: () => Linking.openSettings() },
-      ]
-    );
-    return true;
-  } catch (error) {
-    console.log('Error requesting widget permission:', error);
-    return false;
-  }
+  Alert.alert(
+    'Add Widget',
+    'To add the Sakura Focus widget:\n\n1. Long press on your home screen\n2. Search for "Sakura Focus" or "Timer"\n3. Select the widget and place it',
+    [{ text: 'OK' }]
+  );
+  return true;
 }
 
 export function updateWidgetData(data: WidgetData): void {
-  currentWidgetData = data;
-  console.log('Widget data updated:', data);
+  console.log('Widget data to update:', data);
   
   if (Platform.OS === 'android') {
-    // In native implementation, this would send data to widget via native module
-    // react-native-android-widget or similar library would be used
-    console.log('Sending widget data to native Android widget');
+    try {
+      if (FocusWidgetModule) {
+        FocusWidgetModule.updateWidget(
+          data.phase,
+          data.secondsLeft,
+          data.streak,
+          data.goal,
+          data.round,
+          data.isRunning
+        );
+        console.log('Widget updated via native module');
+      }
+    } catch (error) {
+      console.log('Native widget update failed, using SharedPreferences:', error);
+    }
   }
 }
 
 export function clearWidgetData(): void {
-  currentWidgetData = null;
-}
-
-export function getCurrentWidgetData(): WidgetData | null {
-  return currentWidgetData;
+  updateWidgetData({
+    phase: 'idle',
+    secondsLeft: 0,
+    streak: 0,
+    goal: '',
+    round: 1,
+    isRunning: false,
+  });
 }
 
 export const WIDGET_SIZES = {
@@ -74,22 +78,43 @@ export const WIDGET_TYPES = {
   GOAL: 'goal',
 } as const;
 
-// Native widget requires:
-// 1. Android widget XML (app/src/main/res/xml/widget_info.xml)
-// 2. Widget provider class (Kotlin/Java)
-// 3. Widget layout XML
-// 4. expo-modules-core native module integration
-//
-// For full implementation, use: 
-// - react-native-android-widget library
-// - Or create custom expo-dev-client with native code
-
 export function showWidgetInfo(): void {
   Alert.alert(
     '📱 Home Screen Widgets',
     Platform.OS === 'android'
-      ? 'To add Sakura Focus widget:\n\n1. Long press home screen\n2. Tap "Widgets"\n3. Find "Sakura Focus"\n4. Place widget\n\nNote: Native widgets require building with expo prebuild + gradle.'
-      : 'iOS widgets are not directly supported.\n\nUse Shortcuts app to create timer shortcuts, or build a native iOS widget extension.',
+      ? 'To add Sakura Focus widget:\n\n1. Long press home screen\n2. Tap "Widgets"\n3. Find "Sakura Focus Timer"\n4. Place widget\n\nThe widget shows:\n• Timer countdown\n• Focus/Break phase\n• Your streak\n• Current round'
+      : 'iOS widgets are not supported.',
     [{ text: 'OK' }]
   );
+}
+
+export function createWidgetUpdateHook() {
+  return {
+    onTimerUpdate: (data: WidgetData) => {
+      updateWidgetData(data);
+    },
+    onFocusStart: (goal: string) => {
+      updateWidgetData({
+        phase: 'focus',
+        secondsLeft: 25 * 60,
+        streak: 0,
+        goal,
+        round: 1,
+        isRunning: true,
+      });
+    },
+    onFocusComplete: () => {
+      updateWidgetData({
+        phase: 'break',
+        secondsLeft: 5 * 60,
+        streak: 0,
+        goal: '',
+        round: 1,
+        isRunning: true,
+      });
+    },
+    onSessionEnd: () => {
+      clearWidgetData();
+    },
+  };
 }
