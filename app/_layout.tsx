@@ -68,10 +68,10 @@ export default function RootLayout() {
                 }} 
               />
             </Stack>
-            <InitialRoute />
           </BlockedAppsProvider>
         </TimerProvider>
       </SafeAreaProvider>
+      <InitialRoute />
     </GestureHandlerRootView>
   );
 }
